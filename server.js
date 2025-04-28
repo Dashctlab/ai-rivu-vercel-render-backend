@@ -42,7 +42,7 @@ const headers = {
 };
 
 app.post('/generate', async (req, res) => {
-   const {
+  const {
     curriculum,
     className,
     subject,
@@ -61,24 +61,46 @@ app.post('/generate', async (req, res) => {
   }
 
   try {
-    // Build dynamic prompt
-    let prompt = `You are an expert school examination setter. Create a question paper with the following instructions:\n`;
-    prompt += `- Curriculum Board: ${curriculum}\n`;
-    prompt += `- Class/Grade: ${className}\n`;
-    prompt += `- Subject: ${subject}\n`;
-    if (topic) prompt += `- Topics to cover: ${topic}\n`;
-    if (timeDuration) prompt += `- Time Duration: ${timeDuration} minutes\n`;
-    prompt += `- Total Number of Questions: ${numQuestions}\n`;
+    // Build Question Types & Distribution Instructions
+    let questionTypeInstructions = '';
     if (questionTypes && questionTypes.length > 0) {
-      prompt += `- Question Types: ${questionTypes.join(', ')}\n`;
+      questionTypes.forEach(type => {
+        questionTypeInstructions += `- ${type}: include questions of this type.\n`;
+      });
     }
-    if (difficultySplit) prompt += `- Difficulty Level Split: ${difficultySplit}\n`;
-    if (additionalConditions) prompt += `- Additional Conditions: ${additionalConditions}\n`;
-    if (answerKeyFormat) prompt += `- Answer Key Format: ${answerKeyFormat}\n`;
 
-    // Fixed final Instructions block
-    prompt += `\nInstructions:\n`;
-    prompt += `- Prepare the question paper strictly based on the latest available curriculum and syllabus of the specified board (${curriculum}) for the specified class (${className}).\n`;
+    // Start Prompt
+    let prompt = `You are an expert school examination setter. Create a formal question paper with the following exact requirements:\n\n`;
+
+    prompt += `Curriculum Board: ${curriculum}\n`;
+    prompt += `Class/Grade: ${className}\n`;
+    prompt += `Subject: ${subject}\n`;
+    if (topic) prompt += `Topics to cover: ${topic}\n`;
+    prompt += `Total Time Duration: ${timeDuration} minutes\n\n`;
+
+    prompt += `Question Types and Instructions:\n${questionTypeInstructions}\n`;
+
+    prompt += `Difficulty Split:\n`;
+    const [easy, medium, hard] = difficultySplit.split('-');
+    prompt += `- Easy: ${easy}\n`;
+    prompt += `- Medium: ${medium}\n`;
+    prompt += `- Hard: ${hard}\n\n`;
+
+    prompt += `Time Duration Instructions:\n`;
+    prompt += `- The total time duration for this paper is ${timeDuration} minutes.\n`;
+    prompt += `- Structure the questions and expected answer lengths so that an average student can complete the paper comfortably within the given time.\n`;
+    prompt += `- Adjust question complexity accordingly: simpler and more direct questions for shorter durations, deeper and more descriptive answers for longer durations.\n\n`;
+
+    prompt += `Additional Conditions:\n`;
+    if (additionalConditions) {
+      prompt += `- ${additionalConditions}\n\n`;
+    }
+
+    prompt += `Answer Key:\n`;
+    prompt += `- Format the Answer Key separately as ${answerKeyFormat} (Brief or Detailed).\n\n`;
+
+    // Add Main Instructions
+    prompt += `Instructions:\n`;
     prompt += `- Ensure the paper is appropriate for the subject (${subject}) selected.\n`;
     prompt += `- Arrange questions starting with Easy level, followed by Medium, and then Hard in each section.\n`;
     prompt += `- Organize question types clearly: MCQs and objective questions first, followed by other formats if selected, then Short Answers, then Long Answers.\n`;
@@ -86,10 +108,9 @@ app.post('/generate', async (req, res) => {
     prompt += `- Structure sections with clear titles (e.g., "Section A: MCQs").\n`;
     prompt += `- Do not add extra explanations or filler text unless specifically asked.\n`;
     prompt += `- Ensure mark distribution matches the details provided (if available).\n`;
-    prompt += `- Format the Answer Key separately as Brief or Detailed, based on input.\n`;
     prompt += `- The paper should look clean, professional, and ready to be given in an official school exam.\n`;
 
-    // Make API call to OpenRouter
+    // API Call to OpenRouter
     const data = {
       model: "gpt-3.5-turbo",
       messages: [{
@@ -99,7 +120,6 @@ app.post('/generate', async (req, res) => {
     };
 
     const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', data, { headers });
-
     const generatedQuestions = response.data.choices[0].message.content;
 
     users[email].tokens_used = (users[email].tokens_used || 0) + 500; // simulated token usage
@@ -113,7 +133,6 @@ app.post('/generate', async (req, res) => {
     res.status(500).json({ message: 'Error generating questions' });
   }
 });
-
 
 // Helper functions
 function saveUsers() {
