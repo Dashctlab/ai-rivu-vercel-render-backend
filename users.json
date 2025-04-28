@@ -3,5 +3,30 @@
     "password": "password123",
     "tokens_used": 0,
     "token_limit": 10000
+  },
+  "user1@example.com": {
+    "password": "user1pass",
+    "tokens_used": 0,
+    "token_limit": 10000
+  },
+  "user2@example.com": {
+    "password": "user2pass",
+    "tokens_used": 0,
+    "token_limit": 10000
+  },
+  "user3@example.com": {
+    "password": "user3pass",
+    "tokens_used": 0,
+    "token_limit": 10000
+  },
+  "user4@example.com": {
+    "password": "user4pass",
+    "tokens_used": 0,
+    "token_limit": 10000
+  },
+  "user5@example.com": {
+    "password": "user5pass",
+    "tokens_used": 0,
+    "token_limit": 10000
   }
 }
