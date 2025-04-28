@@ -15,6 +15,9 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(bodyParser.json());
 
+// OpenRouter API Key loaded from environment
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+
 // Load users data
 let users = require('./users.json');
 
@@ -32,25 +35,53 @@ app.post('/login', (req, res) => {
 });
 
 // Generate Questions Route
+
+const headers = {
+  'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+  'Content-Type': 'application/json'
+};
+
 app.post('/generate', async (req, res) => {
-  const { topic } = req.body;
+  const { topic, curriculum, className, subject, numQuestions, difficultySplit, timeDuration, additionalConditions, questionTypes, answerKeyFormat } = req.body;
   const email = req.headers['useremail'];
 
   if (!email || !users[email]) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
 
-  // Simulate OpenRouter API call (replace with real one if needed)
-  const generatedQuestions = `Sample questions for topic: ${topic}`;
+  try {
+    const prompt = `Create a ${numQuestions} questions ${subject} question paper for ${curriculum} ${className}.
+    Topics: ${topic}.
+    Difficulty split: ${difficultySplit}.
+    Time Duration: ${timeDuration}.
+    Answer format: ${answerKeyFormat}.
+    Additional Conditions: ${additionalConditions}.
+    Include these types of questions: ${questionTypes.join(', ')}.`;
 
-  // Update token usage (simulate)
-  users[email].tokens_used = (users[email].tokens_used || 0) + 500; // Assume 500 tokens per generation
-  saveUsers();
+    const data = {
+      model: "gpt-3.5-turbo",
+      messages: [{
+        role: "user",
+        content: prompt
+      }]
+    };
 
-  logActivity(email, 'Generated Questions');
+    const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', data, { headers });
 
-  res.json({ questions: generatedQuestions });
+    const generatedQuestions = response.data.choices[0].message.content;
+
+    users[email].tokens_used = (users[email].tokens_used || 0) + 500; // Simulated, you can improve later
+    saveUsers();
+    logActivity(email, 'Generated Questions');
+
+    res.json({ questions: generatedQuestions });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error generating questions' });
+  }
 });
+
 
 // Helper functions
 function saveUsers() {
