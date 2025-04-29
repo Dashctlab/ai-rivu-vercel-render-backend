@@ -145,13 +145,13 @@ app.post('/generate', async (req, res) => {
 
 //To download as word file
 
-const { Document, Packer, Paragraph, TextRun, HeadingLevel } = require('docx');
+const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType, BorderStyle } = require('docx');
 
 app.post('/download-docx', async (req, res) => {
-  const { subject, questions } = req.body;
+  const { subject, metadata, sections, answerKey } = req.body;
 
-  if (!subject || !questions || !Array.isArray(questions)) {
-    return res.status(400).json({ message: "Invalid input" });
+  if (!subject || !sections || !Array.isArray(sections)) {
+    return res.status(400).json({ message: "Invalid input format" });
   }
 
   try {
@@ -167,21 +167,113 @@ app.post('/download-docx', async (req, res) => {
             }
           },
           children: [
+            // Blank lines for School Name
+            new Paragraph(' '),
+            new Paragraph(' '),
+            new Paragraph(' '),
             new Paragraph({
-              text: `Question Paper - ${subject}`,
-              heading: HeadingLevel.HEADING_1,
+              children: [new TextRun({ text: 'School Name: ___________________', size: 24 })],
+              alignment: AlignmentType.CENTER,
             }),
-            new Paragraph({ text: '' }),
+            // Black line after school name
+            new Paragraph({
+              border: {
+                bottom: { color: '000000', space: 1, value: 'single', size: 6 }
+              }
+            }),
 
-            ...questions.map((q, idx) =>
+            // Blank line
+            new Paragraph(' '),
+
+            // Class (Center, Bold, Big font)
+            new Paragraph({
+              children: [new TextRun({ text: `Class: ${metadata.className}`, bold: true, size: 32 })],
+              alignment: AlignmentType.CENTER
+            }),
+
+            // Subject (Center, Bold, Big font)
+            new Paragraph({
+              children: [new TextRun({ text: `Subject: ${subject}`, bold: true, size: 32 })],
+              alignment: AlignmentType.CENTER
+            }),
+
+            // Total Marks (left) and Time (right) in same line using table
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE }, insideHorizontal: { style: BorderStyle.NONE }, insideVertical: { style: BorderStyle.NONE } },
+              rows: [
+                new TableRow({
+                  children: [
+                    new TableCell({
+                      width: { size: 50, type: WidthType.PERCENTAGE },
+                      children: [new Paragraph(`Total Marks: ${metadata.totalMarks || '___'}`)],
+                      margins: { left: 100 },
+                    }),
+                    new TableCell({
+                      width: { size: 50, type: WidthType.PERCENTAGE },
+                      children: [new Paragraph({
+                        children: [new TextRun(`Time: ${metadata.timeDuration}`)],
+                        alignment: AlignmentType.RIGHT
+                      })],
+                      margins: { right: 100 },
+                    })
+                  ]
+                })
+              ]
+            }),
+
+            // Black line after Marks/Time
+            new Paragraph({
+              border: {
+                bottom: { color: '000000', space: 1, value: 'single', size: 6 }
+              }
+            }),
+
+            new Paragraph(' '), // Blank line
+
+            // Sections
+            ...sections.flatMap(section => [
+              new Paragraph({
+                text: section.title,
+                heading: HeadingLevel.HEADING_2,
+                spacing: { after: 200 },
+              }),
+              ...section.questions.map((q, idx) =>
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: `${idx + 1}. ${q}`,
+                      font: "Times New Roman",
+                      size: 24,
+                    }),
+                  ],
+                  spacing: { after: 100 },
+                })
+              ),
+              new Paragraph(' ') // Gap between sections
+            ]),
+
+            // Page Break before Answer Key
+            new Paragraph({ children: [], pageBreakBefore: true }),
+
+            // Answer Key Section
+            new Paragraph({
+              text: "Answer Key",
+              heading: HeadingLevel.HEADING_2,
+              alignment: AlignmentType.CENTER
+            }),
+            new Paragraph(' '), // Small gap
+
+            ...answerKey.map((ans, idx) =>
               new Paragraph({
                 children: [
                   new TextRun({
-                    text: `${idx + 1}. ${q}`,
+                    text: `${idx + 1}. ${ans}`,
                     font: "Times New Roman",
                     size: 24,
                   }),
                 ],
+                spacing: { after: 100 },
               })
             )
           ]
