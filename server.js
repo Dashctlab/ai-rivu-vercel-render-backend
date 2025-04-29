@@ -143,6 +143,55 @@ app.post('/generate', async (req, res) => {
   }
 });
 
+//To download as word file
+
+const { Document, Packer, Paragraph, TextRun, HeadingLevel } = require('docx');
+
+app.post('/download-docx', async (req, res) => {
+  const { subject, questions } = req.body;
+
+  if (!subject || !questions || !Array.isArray(questions)) {
+    return res.status(400).json({ message: "Invalid input" });
+  }
+
+  try {
+    const doc = new Document();
+
+    // Add heading
+    doc.addSection({
+      properties: {},
+      children: [
+        new Paragraph({
+          text: `Question Paper - ${subject}`,
+          heading: HeadingLevel.HEADING_1,
+        }),
+        new Paragraph({ text: '' }), // blank line
+
+        ...questions.map((q, idx) =>
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `${idx + 1}. ${q}`,
+                font: "Times New Roman",
+                size: 24,
+              }),
+            ],
+          })
+        )
+      ],
+    });
+
+    const buffer = await Packer.toBuffer(doc);
+
+    const fileName = `Question_Paper_${Date.now()}.docx`;
+    res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.send(buffer);
+  } catch (error) {
+    console.error("Error generating .docx:", error);
+    res.status(500).json({ message: "Failed to generate Word file." });
+  }
+});
 
 // Helper functions
 function saveUsers() {
