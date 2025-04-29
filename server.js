@@ -61,13 +61,16 @@ app.post('/generate', async (req, res) => {
   }
 
   try {
-    // Build Question Types & Distribution Instructions
+    // Build Question Type Instructions Dynamically
     let questionTypeInstructions = '';
     if (questionTypes && questionTypes.length > 0) {
       questionTypes.forEach(type => {
-        questionTypeInstructions += `- ${type}: include questions of this type.\n`;
+        questionTypeInstructions += `- ${type}: Generate exactly 5 questions, each carrying 5 marks.\n`; // Assuming default 5 questions × 5 marks per your screenshot
       });
     }
+
+    // Split difficulty
+    const [easy, medium, hard] = difficultySplit.split('-');
 
     // Start Prompt
     let prompt = `You are an expert school examination setter. Create a formal question paper with the following exact requirements:\n\n`;
@@ -78,28 +81,30 @@ app.post('/generate', async (req, res) => {
     if (topic) prompt += `Topics to cover: ${topic}\n`;
     prompt += `Total Time Duration: ${timeDuration} minutes\n\n`;
 
-    prompt += `Question Types and Instructions:\n${questionTypeInstructions}\n`;
+    prompt += `Question Types and Section Instructions:\n${questionTypeInstructions}\n`;
 
     prompt += `Difficulty Split:\n`;
-    const [easy, medium, hard] = difficultySplit.split('-');
-    prompt += `- Easy: ${easy}\n`;
-    prompt += `- Medium: ${medium}\n`;
-    prompt += `- Hard: ${hard}\n\n`;
+    prompt += `- Easy: ${easy}%\n`;
+    prompt += `- Medium: ${medium}%\n`;
+    prompt += `- Hard: ${hard}%\n\n`;
 
     prompt += `Time Duration Instructions:\n`;
     prompt += `- The total time duration for this paper is ${timeDuration} minutes.\n`;
     prompt += `- Structure the questions and expected answer lengths so that an average student can complete the paper comfortably within the given time.\n`;
     prompt += `- Adjust question complexity accordingly: simpler and more direct questions for shorter durations, deeper and more descriptive answers for longer durations.\n\n`;
 
-    prompt += `Additional Conditions:\n`;
+    prompt += `Important:\n`;
+    prompt += `- Strictly follow the number of questions per type exactly.\n`;
+    prompt += `- Do NOT merge or reduce questions.\n`;
+    prompt += `- Each section must have the exact number of questions and marks assigned.\n\n`;
+
     if (additionalConditions) {
-      prompt += `- ${additionalConditions}\n\n`;
+      prompt += `Additional Conditions:\n- ${additionalConditions}\n\n`;
     }
 
-    prompt += `Answer Key:\n`;
-    prompt += `- Format the Answer Key separately as ${answerKeyFormat} (Brief or Detailed).\n\n`;
+    prompt += `Answer Key:\n- Format separately as ${answerKeyFormat} (Brief/Detailed).\n\n`;
 
-    // Add Main Instructions
+    // Main Static Instructions
     prompt += `Instructions:\n`;
     prompt += `- Ensure the paper is appropriate for the subject (${subject}) selected.\n`;
     prompt += `- Arrange questions starting with Easy level, followed by Medium, and then Hard in each section.\n`;
@@ -107,10 +112,10 @@ app.post('/generate', async (req, res) => {
     prompt += `- Maintain a formal examination style and tone.\n`;
     prompt += `- Structure sections with clear titles (e.g., "Section A: MCQs").\n`;
     prompt += `- Do not add extra explanations or filler text unless specifically asked.\n`;
-    prompt += `- Ensure mark distribution matches the details provided (if available).\n`;
+    prompt += `- Ensure mark distribution matches the details provided.\n`;
     prompt += `- The paper should look clean, professional, and ready to be given in an official school exam.\n`;
 
-    // API Call to OpenRouter
+    // Call OpenRouter API
     const data = {
       model: "gpt-3.5-turbo",
       messages: [{
@@ -122,7 +127,7 @@ app.post('/generate', async (req, res) => {
     const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', data, { headers });
     const generatedQuestions = response.data.choices[0].message.content;
 
-    users[email].tokens_used = (users[email].tokens_used || 0) + 500; // simulated token usage
+    users[email].tokens_used = (users[email].tokens_used || 0) + 500; // Simulated usage
     saveUsers();
     logActivity(email, 'Generated Questions');
 
@@ -133,6 +138,7 @@ app.post('/generate', async (req, res) => {
     res.status(500).json({ message: 'Error generating questions' });
   }
 });
+
 
 // Helper functions
 function saveUsers() {
