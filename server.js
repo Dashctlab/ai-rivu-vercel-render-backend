@@ -114,6 +114,10 @@ app.post('/generate', async (req, res) => {
     prompt += `- Do not add extra explanations or filler text unless specifically asked.\n`;
     prompt += `- Ensure mark distribution matches the details provided.\n`;
     prompt += `- The paper should look clean, professional, and ready to be given in an official school exam.\n`;
+    prompt += `- Insert at least 2 blank lines after the last question before starting the Answer Key.\n`;
+    prompt += `- Start the Answer Key in a new section, clearly titled "**Answer Key**" in bold or underlined.\n`;
+    prompt += `- Ensure Answer Key numbering starts separately (1, 2, 3... again fresh).\n`;
+  
 
     // Call OpenRouter API
     const data = {
