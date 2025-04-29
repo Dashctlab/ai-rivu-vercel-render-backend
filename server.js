@@ -159,27 +159,32 @@ app.post('/download-docx', async (req, res) => {
 
     // Add heading
     doc.addSection({
-      properties: {},
-      children: [
-        new Paragraph({
-          text: `Question Paper - ${subject}`,
-          heading: HeadingLevel.HEADING_1,
-        }),
-        new Paragraph({ text: '' }), // blank line
+  properties: {
+    page: {
+      margin: { top: 720, right: 720, bottom: 720, left: 720 }
+    }
+  },
+  children: [
+    new Paragraph({
+      text: `Question Paper - ${subject}`,
+      heading: HeadingLevel.HEADING_1,
+    }),
+    new Paragraph({ text: '' }),
 
-        ...questions.map((q, idx) =>
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: `${idx + 1}. ${q}`,
-                font: "Times New Roman",
-                size: 24,
-              }),
-            ],
-          })
-        )
-      ],
-    });
+    ...questions.map((q, idx) =>
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: `${idx + 1}. ${q}`,
+            font: "Times New Roman",
+            size: 24,
+          }),
+        ],
+      })
+    )
+  ],
+});
+
 
     const buffer = await Packer.toBuffer(doc);
 
