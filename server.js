@@ -222,12 +222,10 @@ app.post('/generate', async (req, res) => {
         prompt += `- Maintain a formal, clear, and professional examination tone suitable for ${className}.\n`;
         prompt += `- Start with general instructions if applicable (e.g., "All questions are compulsory").\n`;
         prompt += `- Clearly label each section (e.g., "Section A: Multiple Choice Questions (Marks: ...)") and indicate total marks for the section if possible.\n`;
-        // Instruct AI on numbering based on requiresConsecutiveNumbering flag
-        if (requiresConsecutiveNumbering) {
-             prompt += `- Number questions **consecutively** throughout the entire paper (e.g., Section A: 1, 2; Section B: 3, 4, 5...). DO NOT restart numbering for each section.\n`;
-        } else {
-             prompt += `- Number questions starting from 1 within each section (e.g., Section A: 1; Section B: 1...). Restart numbering for each section.\n`;
-        }
+        
+	prompt += `- Number questions starting from 1 **within each section** \
+	      (restart numbering for every new section).\n`;
+	    
         prompt += `- Ensure questions are unambiguous and appropriate for the specified curriculum, class, subject, and topics.\n`;
         prompt += `- Adjust question complexity and expected answer length based on the ${timeDuration} minute time limit.\n`;
         prompt += `- Avoid conversational text or unnecessary explanations.\n`;
@@ -346,7 +344,12 @@ app.post('/download-docx', async (req, res) => {
                          }),
                          new TableCell({
                              width: { size: 50, type: WidthType.PERCENTAGE },
-                             children: [new Paragraph({ text: `Time: ${metadata.timeDuration || '___'}`, size: 24, alignment: AlignmentType.RIGHT })],
+                             children: [
+				    new Paragraph({
+				        alignment: AlignmentType.RIGHT,
+				        children: [new TextRun({ text: `Time: ${metadata.timeDuration || '___'}`, size: 24 })]
+				    })
+				],
                               borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE } }
                          }),
                      ],
@@ -365,6 +368,8 @@ app.post('/download-docx', async (req, res) => {
                     heading: HeadingLevel.HEADING_2,
                     spacing: { before: 200, after: 150 },
                 }));
+		    // add an explicit blank line after each section title
+		docChildren.push(new Paragraph({ text: '' }));
             }
              if (Array.isArray(section.questions)) {
                  section.questions.forEach((q) => { // No idx needed here
@@ -398,37 +403,24 @@ app.post('/download-docx', async (req, res) => {
          // --- Answer Key Section (on new page) ---
          if (answerKey && answerKey.length > 0) {
             docChildren.push(new Paragraph({ children: [new PageBreak()] })); // Page break before answer key
-																																																																	
-					 
-							  
-							 
-								   
-																	  
              docChildren.push(new Paragraph({
                  text: "Answer Key",
                  heading: HeadingLevel.HEADING_1, // Main heading for Answer Key
-								   
-																	  
-												
 																				  
                  alignment: AlignmentType.CENTER,
                  spacing: { before: 400, after: 200 }
              }));
-             // **** THIS IS THE CORRECTED PART ****
-             // Loop through the answer key array received from the frontend
-             answerKey.forEach((ans) => { // Use forEach, index (idx) not used for numbering
-                 const answerLines = ans.split('\n'); // Handle multi-line answers correctly
-                  answerLines.forEach((line) => { // Process each line of the answer
-                      docChildren.push(new Paragraph({
-                          children: [new TextRun({
-                              text: line, // <-- USE THE TEXT DIRECTLY FROM THE ARRAY ELEMENT
-                                          // It already contains the numbering from the AI/frontend parsing
-                              font: "Calibri", // Set your desired font
-                              size: 22 // Set your desired font size (11pt)
-                          })],
-                          spacing: { after: 60 }, // Adjust spacing as needed
-                      }));
-                  });
+            // ---- FINAL ANSWER‑KEY FIX (single numbering) ----
+		answerKey.forEach((ans, idx) => {
+		    const clean = ans.replace(/^\d+\.?\s*/, '');   // strip any residual numbers
+		    docChildren.push(new Paragraph({
+		        children: [
+		            new TextRun({ text: `${idx + 1}. `, bold: true, size: 22 }),
+		            new TextRun({ text: clean.trim(), size: 22 })
+		        ],
+		        spacing: { after: 60 },
+		    }));
+		});
              });
              // **** END OF CORRECTION ****
          }
