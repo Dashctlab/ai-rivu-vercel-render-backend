@@ -118,7 +118,28 @@ function logActivity(email, action) {
         console.error("Error logging activity:", err);
     }
 }
+/* -------- NEW HELPERS START -------- */
+function addQuestionParagraph(docChildren, number, text) {
+    docChildren.push(
+        new Paragraph({
+            children: [
+                new TextRun({ text: `${number}. `, bold: true, size: 24 }),
+                new TextRun({ text, size: 24 })
+            ],
+            spacing: { after: 80 }
+        })
+    );
+}
 
+function addOptionParagraph(docChildren, text) {
+    docChildren.push(
+        new Paragraph({
+            children: [ new TextRun({ text, size: 24 }) ],
+            indent: { left: 720 },   // 0.5"
+            spacing: { after: 40 }
+        })
+    );
+}
 // --- Routes ---
 
 // Basic Health Check Route
@@ -360,71 +381,55 @@ app.post('/download-docx', async (req, res) => {
         docChildren.push(new Paragraph({ border: { bottom: { color: "auto", space: 1, value: "single", size: 6 } }, spacing: { after: 400 } }));
 
         // --- Question Sections ---
-        let questionCounter = 0; // For potential consecutive numbering if parsing fails
-        sections.forEach(section => {
-            if (section.title) {
-                docChildren.push(new Paragraph({
-                    text: section.title,
-                    heading: HeadingLevel.HEADING_2,
-                    spacing: { before: 200, after: 150 },
-                }));
-		    // add an explicit blank line after each section title
-		docChildren.push(new Paragraph({ text: '' }));
-            }
-             if (Array.isArray(section.questions)) {
-                 section.questions.forEach((q) => { // No idx needed here
-                     questionCounter++;
-                     // Split question text by newlines potentially added during parsing
-                     const questionLines = q.split('\n');
-                     questionLines.forEach((line, lineIdx) => {
-                         // Basic check if line already starts with numbering (e.g., "1.", "a)")
-                         const hasNumbering = /^\s*(\d+\.|\(?[a-z]\)|\(?[ivx]+\))\s+/i.test(line);
-                         let textToAdd = line;
-                         // Optional: If line DOESN'T start with numbering AND it's the first line,
-                         // you might prepend numbering based on questionCounter as a fallback.
-                         // However, relying on AI/frontend parsing is preferred.
-                         // if (lineIdx === 0 && !hasNumbering) {
-                         //     textToAdd = `${questionCounter}. ${line}`;
-                         // }
 
-											 
-                         docChildren.push(new Paragraph({
-                             children: [new TextRun({ text: textToAdd, font: "Calibri", size: 24 })],
-                             spacing: { after: 80 },
-                             indent: { left: lineIdx === 0 ? 0 : 720 }, // Indent subsequent lines slightly
-                         }));
-                     });
-                 });
-             }
-            docChildren.push(new Paragraph(" ")); // Spacing between sections
-        });
+	sections.forEach(sec => {
+	    // Section title
+	    docChildren.push(
+	        new Paragraph({
+	            text: sec.title,
+	            heading: HeadingLevel.HEADING_2,
+	            spacing: { before: 200, after: 150 }
+	        })
+	    );
+	
+	    let localNum = 1;        // restart numbering per section
+	    sec.questions.forEach(qBlock => {
+	        const lines = qBlock.split('\n').filter(Boolean);
+	
+	        // first line → stem
+	        addQuestionParagraph(docChildren, localNum++, lines[0]);
+	
+	        // remaining lines that start with A) / B) / etc. → options
+	        lines.slice(1).forEach(opt => addOptionParagraph(docChildren, opt));
+	    });
+	
+	    // blank line between sections
+	    docChildren.push(new Paragraph({ text: '' }));
+	});
 
+	    
+	// --- Answer Key ---
+	docChildren.push(new Paragraph({ children: [ new PageBreak() ] }));
+	docChildren.push(new Paragraph({
+	    text: "Answer Key",
+	    heading: HeadingLevel.HEADING_1,
+	    alignment: AlignmentType.CENTER,
+	    spacing: { before: 400, after: 200 }
+	}));
+	
+	answerKey.forEach((ans, idx) => {
+	    const clean = ans.replace(/^\d+\.?\s*/, '');    // drop any existing numbers
+	    docChildren.push(
+	        new Paragraph({
+	            children: [
+	                new TextRun({ text: `${idx + 1}. `, bold: true, size: 22 }),
+	                new TextRun({ text: clean.trim(), size: 22 })
+	            ],
+	            spacing: { after: 60 }
+	        })
+	    );
+	});
 
-         // --- Answer Key Section (on new page) ---
-         if (answerKey && answerKey.length > 0) {
-            docChildren.push(new Paragraph({ children: [new PageBreak()] })); // Page break before answer key
-             docChildren.push(new Paragraph({
-                 text: "Answer Key",
-                 heading: HeadingLevel.HEADING_1, // Main heading for Answer Key
-																				  
-                 alignment: AlignmentType.CENTER,
-                 spacing: { before: 400, after: 200 }
-             }));
-            // ---- FINAL ANSWER‑KEY FIX (single numbering) ----
-		answerKey.forEach((ans, idx) => {
-		    const clean = ans.replace(/^\d+\.?\s*/, '');   // strip any residual numbers
-		    docChildren.push(new Paragraph({
-		        children: [
-		            new TextRun({ text: `${idx + 1}. `, bold: true, size: 22 }),
-		            new TextRun({ text: clean.trim(), size: 22 })
-		        ],
-		        spacing: { after: 60 },
-		    }));
-		});
-             });
-             // **** END OF CORRECTION ****
-         }
-			   
 
 											 
 
