@@ -1,3 +1,4 @@
+
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
@@ -53,6 +54,7 @@ const corsOptions = {
     optionsSuccessStatus: 204 // For preflight requests
 };
 app.use(cors(corsOptions));
+						   
 
 // Handle Preflight Requests explicitly for all routes
 app.options('*', cors(corsOptions));
@@ -128,6 +130,7 @@ app.get('/', (req, res) => {
 // Login Route
 app.post('/login', (req, res) => {
     const { email, password } = req.body;
+							
 
     if (!email || !password) {
         return res.status(400).json({ message: 'Email and password are required' });
@@ -140,11 +143,13 @@ app.post('/login', (req, res) => {
         res.status(200).json({ message: 'Login successful', email });
     } else {
         logActivity(email, 'Login Failed');
+		  
         res.status(401).json({ message: 'Invalid credentials' });
     }
 });
 
 // Generate Questions Route
+
 const openRouterHeaders = {
     'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
     'Content-Type': 'application/json',
@@ -159,6 +164,7 @@ app.post('/generate', async (req, res) => {
         className,
         subject,
         topic,
+				 
         difficultySplit,
         timeDuration, // This is the value (e.g., 60)
         additionalConditions,
@@ -167,10 +173,12 @@ app.post('/generate', async (req, res) => {
     } = req.body;
     const email = req.headers['useremail'] || 'anonymous'; // Get email from header
 
+
     // Basic Input Validation
     if (!curriculum || !className || !subject || !questionDetails || !Array.isArray(questionDetails) || questionDetails.length === 0) {
         logActivity(email, 'Generate Failed - Missing Parameters');
         return res.status(400).json({ message: 'Missing required generation parameters.' });
+		 
     }
 
     try {
@@ -200,7 +208,6 @@ app.post('/generate', async (req, res) => {
         });
         prompt += `\n`;
 
-
         prompt += `**Difficulty Distribution (Apply across the entire paper):**\n`;
         if (difficultySplit && difficultySplit.includes('%')) {
             const [easy, medium, hard] = difficultySplit.split('-');
@@ -211,8 +218,6 @@ app.post('/generate', async (req, res) => {
              prompt += `- Default difficulty distribution (primarily Medium).\n`;
         }
         prompt += `\n`;
-
-
         prompt += `**Formatting and Style Instructions:**\n`;
         prompt += `- Maintain a formal, clear, and professional examination tone suitable for ${className}.\n`;
         prompt += `- Start with general instructions if applicable (e.g., "All questions are compulsory").\n`;
@@ -241,11 +246,12 @@ app.post('/generate', async (req, res) => {
         prompt += `- Ensure answer key numbering **precisely matches** the question numbering used in the paper.\n\n`;
 
         prompt += `Generate the complete question paper followed by the answer key based strictly on these instructions. Ensure the question numbering style (consecutive or section-restarted) is consistent between the questions and the answer key.`;
-
+																		
+																							 
 
         // --- Call OpenRouter API ---
         console.log(`Sending prompt to OpenRouter for ${subject}, ${className}...`);
-
+						  
         const requestData = {
             model: "openai/gpt-3.5-turbo-1106", // Specify a potentially better/newer model if available
             messages: [{
@@ -257,6 +263,7 @@ app.post('/generate', async (req, res) => {
         };
 
         const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', requestData, { headers: openRouterHeaders });
+																		
 
         if (!response.data || !response.data.choices || response.data.choices.length === 0 || !response.data.choices[0].message || !response.data.choices[0].message.content) {
              throw new Error("Invalid response structure received from OpenRouter.");
@@ -266,7 +273,7 @@ app.post('/generate', async (req, res) => {
         const usage = response.data.usage || { total_tokens: 0 }; // Get token usage
 
         console.log(`Received response from OpenRouter. Tokens used: ${usage.total_tokens}`);
-
+	
         // Update User Token Usage
         if (email !== 'anonymous' && users[email]) {
             users[email].tokens_used = (users[email].tokens_used || 0) + usage.total_tokens;
@@ -368,7 +375,6 @@ app.post('/download-docx', async (req, res) => {
                          // Basic check if line already starts with numbering (e.g., "1.", "a)")
                          const hasNumbering = /^\s*(\d+\.|\(?[a-z]\)|\(?[ivx]+\))\s+/i.test(line);
                          let textToAdd = line;
-
                          // Optional: If line DOESN'T start with numbering AND it's the first line,
                          // you might prepend numbering based on questionCounter as a fallback.
                          // However, relying on AI/frontend parsing is preferred.
@@ -376,6 +382,7 @@ app.post('/download-docx', async (req, res) => {
                          //     textToAdd = `${questionCounter}. ${line}`;
                          // }
 
+											 
                          docChildren.push(new Paragraph({
                              children: [new TextRun({ text: textToAdd, font: "Calibri", size: 24 })],
                              spacing: { after: 80 },
@@ -391,13 +398,22 @@ app.post('/download-docx', async (req, res) => {
          // --- Answer Key Section (on new page) ---
          if (answerKey && answerKey.length > 0) {
             docChildren.push(new Paragraph({ children: [new PageBreak()] })); // Page break before answer key
+																																																																	
+					 
+							  
+							 
+								   
+																	  
              docChildren.push(new Paragraph({
                  text: "Answer Key",
                  heading: HeadingLevel.HEADING_1, // Main heading for Answer Key
+								   
+																	  
+												
+																				  
                  alignment: AlignmentType.CENTER,
                  spacing: { before: 400, after: 200 }
              }));
-
              // **** THIS IS THE CORRECTED PART ****
              // Loop through the answer key array received from the frontend
              answerKey.forEach((ans) => { // Use forEach, index (idx) not used for numbering
@@ -416,7 +432,9 @@ app.post('/download-docx', async (req, res) => {
              });
              // **** END OF CORRECTION ****
          }
+			   
 
+											 
 
         // --- Assemble Document ---
         const doc = new Document({
@@ -437,6 +455,8 @@ app.post('/download-docx', async (req, res) => {
                 children: docChildren,
             }]
         });
+														
+			   
 
         // --- Generate Buffer & Send Response ---
         const buffer = await Packer.toBuffer(doc);
@@ -448,10 +468,13 @@ app.post('/download-docx', async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
         res.setHeader('Content-Length', buffer.length);
-
         logActivity(email, `Download Success - Subject: ${subject}, Class: ${metadata.className}`);
         res.send(buffer);
 
+														 
+																			 
+																											 
+					 
     } catch (error) {
         console.error(`Error generating .docx for ${subject}, ${metadata.className}:`, error);
         logActivity(email, `Download Failed DOCX - Error: ${error.message}`);
@@ -460,7 +483,6 @@ app.post('/download-docx', async (req, res) => {
         }
     }
 });
-
 
 // --- Error Handling Middleware (Basic Example) ---
 app.use((err, req, res, next) => {
