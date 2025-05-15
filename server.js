@@ -45,29 +45,22 @@ if (!fs.existsSync(logsFilePath)) {
 
 
 // CORS Configuration
-const corsOptions = {
-    // Allow requests from your specific Vercel frontend URL
-    // Ensure this matches EXACTLY including https://
-  //  origin: 'https://ai-rivu-vercel-frontend.vercel.app',    // hardcoding
-	//moved front end url to env 
-	const allowedOrigins = process.env.ALLOWED_ORIGIN?.split(',') || [];
 
-	const corsOptions = {
-  		origin: function (origin, callback) {
-    	if (!origin || allowedOrigins.includes(origin)) {
-      	callback(null, true);
-    	} else {
-      	callback(new Error(`CORS not allowed for origin: ${origin}`));
-    		}
-  	},
-  	
-    methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
-    credentials: true, // Allow cookies if needed later
-    optionsSuccessStatus: 204 // For preflight requests
+const allowedOrigins = process.env.ALLOWED_ORIGIN?.split(',') || [];
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS not allowed for origin: ${origin}`));
+    }
+  },
+  methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+  credentials: true,
+  optionsSuccessStatus: 204
 };
 app.use(cors(corsOptions));
-						   
-
 // Handle Preflight Requests explicitly for all routes
 app.options('*', cors(corsOptions));
 
@@ -83,7 +76,14 @@ if (!OPENROUTER_API_KEY) {
 } else {
     console.log("OpenRouter API Key loaded.");
 }
-
+// Debug route to check env configuration
+app.get('/env-check', (req, res) => {
+  res.json({
+    env: process.env.NODE_ENV || 'unknown',
+    allowedOrigins: allowedOrigins,
+    apiKeyLoaded: !!OPENROUTER_API_KEY
+  });
+});
 
 // --- Load Users Data ---
 let users = {};
@@ -508,6 +508,7 @@ app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`Allowing requests from: ${corsOptions.origin}`);
     logActivity('SYSTEM', 'Server Started');
+    console.log(`Allowed CORS Origins: ${allowedOrigins.join(', ') || 'none'}`);
 });
 
 // --- Graceful Shutdown ---
