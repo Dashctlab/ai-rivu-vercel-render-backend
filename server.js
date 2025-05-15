@@ -48,7 +48,19 @@ if (!fs.existsSync(logsFilePath)) {
 const corsOptions = {
     // Allow requests from your specific Vercel frontend URL
     // Ensure this matches EXACTLY including https://
-    origin: 'https://ai-rivu-vercel-frontend.vercel.app',
+  //  origin: 'https://ai-rivu-vercel-frontend.vercel.app',    // hardcoding
+	//moved front end url to env 
+	const allowedOrigins = process.env.ALLOWED_ORIGIN?.split(',') || [];
+
+	const corsOptions = {
+  		origin: function (origin, callback) {
+    	if (!origin || allowedOrigins.includes(origin)) {
+      	callback(null, true);
+    	} else {
+      	callback(new Error(`CORS not allowed for origin: ${origin}`));
+    		}
+  	},
+  	
     methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
     credentials: true, // Allow cookies if needed later
     optionsSuccessStatus: 204 // For preflight requests
