@@ -18,6 +18,7 @@ const corsOptions = {
     exposedHeaders: ['Set-Cookie']
 };
 
+// Apply CORS configuration
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
@@ -77,16 +78,17 @@ try {
 }
 
 // --- Helper Functions ---
+function getCurrentTimestamp() {
+    const now = new Date();
+    return now.toISOString().replace('T', ' ').substring(0, 19);
+}
+
 function saveUsers() {
     try {
         fs.writeFileSync(usersFilePath, JSON.stringify(users, null, 2));
     } catch (err) {
         console.error("Error saving users.json:", err);
     }
-}
-
-function getCurrentTimestamp() {
-    return new Date().toISOString();
 }
 
 function logActivity(email, action) {
@@ -145,50 +147,69 @@ const verifyToken = (req, res, next) => {
     const email = req.headers.useremail;
 
     if (!token || !email || !users[email]) {
-        return res.status(401).json({ message: 'Unauthorized' });
+        return res.status(401).json({ 
+            message: 'Unauthorized',
+            timestamp: getCurrentTimestamp()
+        });
     }
     next();
 };
 
-// --- Routes ---
-
-// Basic Health Check Route
+// --- Public Routes (No Auth Required) ---
 app.get('/', (req, res) => {
-    res.status(200).send('AI-RIVU Backend is running.');
+    res.header('Access-Control-Allow-Origin', '*');
+    res.status(200).json({
+        message: 'AI-RIVU Backend is running.',
+        timestamp: getCurrentTimestamp()
+    });
 });
 
-// Login Route
+app.get('/health', (req, res) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.status(200).json({
+        status: 'healthy',
+        timestamp: getCurrentTimestamp()
+    });
+});
+
+// Login Route (Public)
 app.post('/login', async (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
-        return res.status(400).json({ message: 'Email and password are required' });
+        return res.status(400).json({
+            message: 'Email and password are required',
+            timestamp: getCurrentTimestamp()
+        });
     }
 
     const user = users[email];
 
     if (user && user.password === password) {
         const token = Math.random().toString(36).substring(7);
-        
-        // Log successful login with timestamp
         logActivity(email, `Login Success - ${getCurrentTimestamp()}`);
         
-        // Set proper CORS headers
         res.header('Access-Control-Allow-Credentials', 'true');
         res.header('Access-Control-Allow-Origin', corsOptions.origin);
         
         res.status(200).json({
             message: 'Login successful',
             email,
-            token
+            token,
+            timestamp: getCurrentTimestamp()
         });
     } else {
         logActivity(email, `Login Failed - ${getCurrentTimestamp()}`);
-        res.status(401).json({ message: 'Invalid credentials' });
+        res.status(401).json({
+            message: 'Invalid credentials',
+            timestamp: getCurrentTimestamp()
+        });
     }
 });
 
-// Generate Questions Route
+// --- Protected Routes (Auth Required) ---
+
+// OpenRouter configuration
 const openRouterHeaders = {
     'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
     'Content-Type': 'application/json',
@@ -196,6 +217,7 @@ const openRouterHeaders = {
     'X-Title': 'AI-RIVU QPG',
 };
 
+// Generate Questions Route (Protected)
 app.post('/generate', verifyToken, async (req, res) => {
     const {
         curriculum,
@@ -213,7 +235,10 @@ app.post('/generate', verifyToken, async (req, res) => {
 
     if (!curriculum || !className || !subject || !questionDetails || !Array.isArray(questionDetails) || questionDetails.length === 0) {
         logActivity(email, 'Generate Failed - Missing Parameters');
-        return res.status(400).json({ message: 'Missing required generation parameters.' });
+        return res.status(400).json({
+            message: 'Missing required generation parameters.',
+            timestamp: getCurrentTimestamp()
+        });
     }
 
     try {
@@ -227,7 +252,6 @@ app.post('/generate', verifyToken, async (req, res) => {
 
         prompt += `**Paper Structure & Content:**\n`;
         let sectionCounter = 0;
-        let requiresConsecutiveNumbering = false;
         questionDetails.forEach(detail => {
             sectionCounter++;
             const sectionLetter = String.fromCharCode(64 + sectionCounter);
@@ -238,11 +262,10 @@ app.post('/generate', verifyToken, async (req, res) => {
             } else {
                 prompt += `  - Assign appropriate marks per question for this section based on type and class level.\n`;
             }
-            if (detail.num > 1) requiresConsecutiveNumbering = true;
         });
         prompt += `\n`;
 
-        prompt += `**Difficulty Distribution (Apply across the entire paper):**\n`;
+        prompt += `**Difficulty Distribution:**\n`;
         if (difficultySplit && difficultySplit.includes('%')) {
             const [easy, medium, hard] = difficultySplit.split('-');
             prompt += `- Easy: ${easy || '0%'}\n`;
@@ -253,24 +276,20 @@ app.post('/generate', verifyToken, async (req, res) => {
         }
         prompt += `\n`;
 
-        prompt += `**Formatting and Style Instructions:**\n`;
-        prompt += `- Maintain a formal, clear, and professional examination tone suitable for ${className}.\n`;
-        prompt += `- Start with general instructions if applicable (e.g., "All questions are compulsory").\n`;
-        prompt += `- Clearly label each section (e.g., "Section A: Multiple Choice Questions (Marks: ...)").\n`;
-        prompt += `- Number questions starting from 1 within each section.\n`;
-        prompt += `- Ensure questions are unambiguous and appropriate for the specified curriculum.\n`;
-        prompt += `- Adjust question complexity based on the ${timeDuration} minute time limit.\n`;
-        if (additionalConditions && additionalConditions.trim() !== '') {
+        prompt += `**Formatting Instructions:**\n`;
+        prompt += `- Professional examination tone for ${className}\n`;
+        prompt += `- Clear section labels with marks\n`;
+        prompt += `- Number questions within each section\n`;
+        prompt += `- Clear and unambiguous questions\n`;
+        if (additionalConditions?.trim()) {
             prompt += `- Additional conditions: ${additionalConditions}\n`;
         }
         prompt += `\n`;
 
-        prompt += `**Answer Key Instructions:**\n`;
-        prompt += `- After the last question, insert a clear separator (---)\n`;
-        prompt += `- Provide an Answer Key section.\n`;
-        prompt += `- List answers corresponding to each question number.\n`;
-        prompt += `- Format: '${answerKeyFormat}' (Brief=direct answer, Detailed=with explanation)\n`;
-        prompt += `- Ensure answer key numbering matches question numbering.\n\n`;
+        prompt += `**Answer Key Format:**\n`;
+        prompt += `- Separate section after questions\n`;
+        prompt += `- Match question numbering\n`;
+        prompt += `- Format: '${answerKeyFormat}'\n\n`;
 
         const requestData = {
             model: "openai/gpt-3.5-turbo-1106",
@@ -285,7 +304,7 @@ app.post('/generate', verifyToken, async (req, res) => {
         const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', requestData, { headers: openRouterHeaders });
 
         if (!response.data?.choices?.[0]?.message?.content) {
-            throw new Error("Invalid response structure from OpenRouter.");
+            throw new Error("Invalid response from OpenRouter.");
         }
 
         const generatedQuestions = response.data.choices[0].message.content;
@@ -297,25 +316,32 @@ app.post('/generate', verifyToken, async (req, res) => {
         }
         
         logActivity(email, `Generated Questions - Subject: ${subject}, Class: ${className}, Tokens: ${usage.total_tokens}`);
-        res.json({ questions: generatedQuestions });
+        res.json({
+            questions: generatedQuestions,
+            timestamp: getCurrentTimestamp()
+        });
 
     } catch (error) {
-        console.error("Error during question generation:", error.response ? error.response.data : error.message);
+        console.error("Generation error:", error.response?.data || error.message);
         logActivity(email, `Generate Failed - Error: ${error.message}`);
         res.status(error.response?.status || 500).json({
-            message: `Error generating questions: ${error.response?.data?.error?.message || error.message}`
+            message: `Generation error: ${error.response?.data?.error?.message || error.message}`,
+            timestamp: getCurrentTimestamp()
         });
     }
 });
 
-// Download DOCX Route
+// Download DOCX Route (Protected)
 app.post('/download-docx', verifyToken, async (req, res) => {
     const { subject, metadata, sections, answerKey } = req.body;
     const email = req.headers['useremail'] || 'anonymous';
 
     if (!subject || !metadata || !sections || !Array.isArray(sections) || !answerKey || !Array.isArray(answerKey)) {
         logActivity(email, 'Download Failed - Invalid Input');
-        return res.status(400).json({ message: "Invalid input parameters." });
+        return res.status(400).json({
+            message: "Invalid input parameters.",
+            timestamp: getCurrentTimestamp()
+        });
     }
 
     try {
@@ -478,7 +504,7 @@ app.post('/download-docx', verifyToken, async (req, res) => {
         const buffer = await Packer.toBuffer(doc);
         const safeSubject = subject.replace(/[^a-z0-9]/gi, '_').toLowerCase();
         const safeClassName = metadata.className ? metadata.className.replace(/\s+/g, '_') : 'unknown_class';
-        const fileName = `Question_Paper_${safeSubject}_${safeClassName}_${Date.now()}.docx`;
+        const fileName = `Question_Paper_${safeSubject}_${safeClassName}_${getCurrentTimestamp().replace(/[: ]/g, '_')}.docx`;
 
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
@@ -488,30 +514,44 @@ app.post('/download-docx', verifyToken, async (req, res) => {
         res.send(buffer);
 
     } catch (error) {
-        console.error(`Error generating .docx for ${subject}:`, error);
+        console.error(`DOCX generation error:`, error);
         logActivity(email, `Download Failed DOCX - Error: ${error.message}`);
         if (!res.headersSent) {
-            res.status(500).json({ message: `Failed to generate Word file: ${error.message}` });
+            res.status(500).json({
+                message: `Failed to generate Word file: ${error.message}`,
+                timestamp: getCurrentTimestamp()
+            });
         }
     }
 });
 
 // Error Handling
 app.use((req, res, next) => {
-    res.status(404).json({ message: 'Route not found' });
+    if (req.path === '/' || req.path === '/health') {
+        res.header('Access-Control-Allow-Origin', '*');
+    }
+    res.status(404).json({
+        message: 'Route not found',
+        timestamp: getCurrentTimestamp()
+    });
 });
 
 app.use((err, req, res, next) => {
     console.error("Unhandled error:", err.stack);
     logActivity('SYSTEM', `Unhandled Error - ${err.message}`);
     
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Origin', corsOptions.origin);
+    if (req.path === '/' || req.path === '/health') {
+        res.header('Access-Control-Allow-Origin', '*');
+    } else {
+        res.header('Access-Control-Allow-Credentials', 'true');
+        res.header('Access-Control-Allow-Origin', corsOptions.origin);
+    }
     
     if (!res.headersSent) {
         res.status(500).json({
             message: 'Internal server error',
-            error: process.env.NODE_ENV === 'development' ? err.message : undefined
+            error: process.env.NODE_ENV === 'development' ? err.message : undefined,
+            timestamp: getCurrentTimestamp()
         });
     }
 });
