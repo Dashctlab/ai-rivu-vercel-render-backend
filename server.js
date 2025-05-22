@@ -496,7 +496,7 @@ app.use((err, req, res, next) => {
 // --- Start Server ---
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-    console.log(`Allowing requests from: ${corsOptions.origin}`);
+    console.log(`Allowing requests from: ${config.FRONTEND_URL}`);
     logActivity('SYSTEM', 'Server Started');
 });
 
