@@ -1,4 +1,5 @@
-
+require('dotenv').config();
+const config = require('./config');
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
@@ -48,10 +49,11 @@ if (!fs.existsSync(logsFilePath)) {
 const corsOptions = {
     // Allow requests from your specific Vercel frontend URL
     // Ensure this matches EXACTLY including https://
-    origin: 'https://ai-rivu-vercel-frontend.vercel.app',
+    origin: config.FRONTEND_URL,
     methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
     credentials: true, // Allow cookies if needed later
     optionsSuccessStatus: 204 // For preflight requests
+	
 };
 app.use(cors(corsOptions));
 						   
@@ -175,7 +177,7 @@ const openRouterHeaders = {
     'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
     'Content-Type': 'application/json',
     // Recommended headers by OpenRouter
-    'HTTP-Referer': 'https://ai-rivu-vercel-frontend.vercel.app', // Replace with your site URL
+    'HTTP-Referer': config.FRONTEND_URL, 
     'X-Title': 'AI-RIVU QPG', // Replace with your app name
 };
 
@@ -494,7 +496,7 @@ app.use((err, req, res, next) => {
 // --- Start Server ---
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-    console.log(`Allowing requests from: ${corsOptions.origin}`);
+    console.log(`Allowing requests from: ${config.FRONTEND_URL}`);
     logActivity('SYSTEM', 'Server Started');
 });
 
