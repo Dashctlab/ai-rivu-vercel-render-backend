@@ -143,7 +143,7 @@ app.get('/', (req, res) => {
 
 
 // Login Route
-app.post('/login', (req, res) => {
+app.post('/login', async (req, res) => {
     const { email, password } = req.body;
 							
 
@@ -154,10 +154,10 @@ app.post('/login', (req, res) => {
     const user = users[email];
 
     if (user && user.password === password) {
-        logActivity(email, 'Login Success');
+        await logActivity(email, 'Login Success');
         res.status(200).json({ message: 'Login successful', email });
     } else {
-        logActivity(email, 'Login Failed');
+        await logActivity(email, 'Login Failed');
 		  
         res.status(401).json({ message: 'Invalid credentials' });
     }
@@ -191,7 +191,7 @@ app.post('/generate', async (req, res) => {
 
     // Basic Input Validation
     if (!curriculum || !className || !subject || !questionDetails || !Array.isArray(questionDetails) || questionDetails.length === 0) {
-        logActivity(email, 'Generate Failed - Missing Parameters');
+        await logActivity(email, 'Generate Failed - Missing Parameters');
         return res.status(400).json({ message: 'Missing required generation parameters.' });
 		 
     }
@@ -292,13 +292,13 @@ app.post('/generate', async (req, res) => {
             users[email].tokens_used = (users[email].tokens_used || 0) + usage.total_tokens;
             saveUsers();
         }
-        logActivity(email, `Generated Questions - Subject: ${subject}, Class: ${className}, Tokens: ${usage.total_tokens}`);
+        await logActivity(email, `Generated Questions - Subject: ${subject}, Class: ${className}, Tokens: ${usage.total_tokens}`);
 
         res.json({ questions: generatedQuestions });
 
     } catch (error) {
         console.error("Error during question generation:", error.response ? JSON.stringify(error.response.data, null, 2) : error.message);
-        logActivity(email, `Generate Failed - Error: ${error.message}`);
+        await logActivity(email, `Generate Failed - Error: ${error.message}`);
         res.status(error.response?.status || 500).json({ message: `Error generating questions: ${error.response?.data?.error?.message || error.message}` });
     }
 });
@@ -311,19 +311,19 @@ app.post('/download-docx', async (req, res) => {
 
     // --- Input Validation ---
     if (!subject || typeof subject !== 'string' || subject.trim() === '') {
-        logActivity(email, 'Download Failed - Missing Subject');
+        await logActivity(email, 'Download Failed - Missing Subject');
         return res.status(400).json({ message: "Invalid input: Subject is required." });
     }
     if (!metadata || typeof metadata !== 'object') {
-        logActivity(email, 'Download Failed - Missing Metadata');
+        await logActivity(email, 'Download Failed - Missing Metadata');
         return res.status(400).json({ message: "Invalid input: Metadata is required." });
     }
      if (!sections || !Array.isArray(sections)) {
-        logActivity(email, 'Download Failed - Invalid Sections');
+        await logActivity(email, 'Download Failed - Invalid Sections');
         return res.status(400).json({ message: "Invalid input: Sections must be an array." });
     }
     if (!answerKey || !Array.isArray(answerKey)) {
-        logActivity(email, 'Download Failed - Invalid Answer Key');
+        await logActivity(email, 'Download Failed - Invalid Answer Key');
         return res.status(400).json({ message: "Invalid input: Answer Key must be an array." });
     }
 
@@ -459,7 +459,7 @@ app.post('/download-docx', async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
         res.setHeader('Content-Length', buffer.length);
-        logActivity(email, `Download Success - Subject: ${subject}, Class: ${metadata.className}`);
+        await logActivity(email, `Download Success - Subject: ${subject}, Class: ${metadata.className}`);
         res.send(buffer);
 
 														 
@@ -468,17 +468,17 @@ app.post('/download-docx', async (req, res) => {
 					 
     } catch (error) {
         console.error(`Error generating .docx for ${subject}, ${metadata.className}:`, error);
-        logActivity(email, `Download Failed DOCX - Error: ${error.message}`);
+        await logActivity(email, `Download Failed DOCX - Error: ${error.message}`);
         if (!res.headersSent) {
              res.status(500).json({ message: `Failed to generate Word file on server: ${error.message}` });
         }
     }
 });
 
-// --- Error Handling Middleware (Basic Example) ---
-app.use((err, req, res, next) => {
+// --- Error Handling Middleware 
+app.use( async (err, req, res, next) => {
     console.error("Unhandled error:", err.stack);
-    logActivity('SYSTEM', `Unhandled Error - ${err.message}`);
+    await logActivity('SYSTEM', `Unhandled Error - ${err.message}`);
     if (!res.headersSent) {
         res.status(500).send('Something broke!');
     }
@@ -486,23 +486,24 @@ app.use((err, req, res, next) => {
 
 
 // --- Start Server ---
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`Allowing requests from: ${config.FRONTEND_URL}`);
-    logActivity('SYSTEM', 'Server Started');
+    await logActivity('SYSTEM', 'Server Started');
 });
 
 // --- Graceful Shutdown ---
 process.on('SIGINT', () => {
     console.log('SIGINT signal received: closing HTTP server');
-    logActivity('SYSTEM', 'Server Shutdown Signal');
+	logActivity('SYSTEM', 'Server Shutdown Signal').then(() => {
     // Perform cleanup if needed (e.g., close database connections)
     // Give time for existing requests to finish?
     process.exit(0);
 });
-
-process.on('SIGTERM', () => {
+});
+process.on('SIGTERM',  () => {
     console.log('SIGTERM signal received: closing HTTP server');
-    logActivity('SYSTEM', 'Server Termination Signal');
+     logActivity('SYSTEM', 'Server Termination Signal').then(() => {
     process.exit(0);
+});
 });
