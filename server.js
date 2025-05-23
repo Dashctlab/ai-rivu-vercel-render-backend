@@ -55,11 +55,8 @@ const corsOptions = {
     optionsSuccessStatus: 204 // For preflight requests
 };
 
-
-app.use(cors());
-app.options('*', cors());
-// app.use(cors(corsOptions));  --> only temp removed
-// app.options('*', cors(corsOptions)); --> only temp remove
+app.use(cors(corsOptions));  
+app.options('*', cors(corsOptions));
 
 app.use(bodyParser.json({ limit: '10mb' })); // Increase payload size limit if needed
 app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
