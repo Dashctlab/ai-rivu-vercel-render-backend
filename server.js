@@ -1,123 +1,116 @@
+
+// Load environment variables from .env file
 require('dotenv').config();
 const config = require('./config');
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const fs = require('fs');
-const path = require('path'); // Recommended for handling file paths
+const fsPromises = fs.promises;
+const path = require('path');
 const axios = require('axios');
-// Ensure all necessary docx components are imported
-const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType, BorderStyle, PageBreak } = require('docx');
+
+// Import DOCX components for question paper generation
+const {
+    Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
+    Table, TableRow, TableCell, WidthType, BorderStyle, PageBreak
+} = require('docx');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Determine base directory for data files
-const dataDir = path.join(__dirname, 'data'); // Assuming data files are in a 'data' subdirectory
+// File paths for user data and logs
+const dataDir = path.join(__dirname, 'data');
 const usersFilePath = path.join(dataDir, 'users.json');
 const logsFilePath = path.join(dataDir, 'activity_logs.json');
 
-// Ensure data directory and files exist
-if (!fs.existsSync(dataDir)) {
-    try {
-        fs.mkdirSync(dataDir);
-        console.log(`Created data directory at ${dataDir}`);
-    } catch (err) {
-        console.error(`Error creating data directory: ${err}`);
-        // Decide if this is fatal
-    }
-}
-if (!fs.existsSync(usersFilePath)) {
-    try {
-        fs.writeFileSync(usersFilePath, JSON.stringify({}, null, 2)); // Start with empty users object
-        console.log(`Created empty users file at ${usersFilePath}`);
-    } catch (err) {
-        console.error(`Error creating users file: ${err}`);
-    }
-}
-if (!fs.existsSync(logsFilePath)) {
-     try {
-        fs.writeFileSync(logsFilePath, JSON.stringify([], null, 2)); // Start with empty logs array
-        console.log(`Created empty logs file at ${logsFilePath}`);
-    } catch (err) {
-         console.error(`Error creating logs file: ${err}`);
-    }
-}
-
-
-// CORS Configuration
+// CORS setup to allow only the frontend domain
 const corsOptions = {
-    // Allow requests from your specific Vercel frontend URL
-    // Ensure this matches EXACTLY including https://
     origin: config.FRONTEND_URL,
     methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
-    credentials: true, // Allow cookies if needed later
-    optionsSuccessStatus: 204 // For preflight requests
+    credentials: true,
+    optionsSuccessStatus: 204
 };
 
-app.use(cors(corsOptions));  
+// Middleware setup
+app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
-
-app.use(bodyParser.json({ limit: '10mb' })); // Increase payload size limit if needed
+app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 
-
-// --- Environment Variable Check ---
+// Environment variable check for OpenRouter API
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 if (!OPENROUTER_API_KEY) {
     console.error("FATAL ERROR: OPENROUTER_API_KEY environment variable is not set.");
-    // process.exit(1); // Optionally exit if API key is crucial
 } else {
     console.log("OpenRouter API Key loaded.");
 }
 
-
-// --- Load Users Data ---
 let users = {};
-try {
-    const usersData = fs.readFileSync(usersFilePath, 'utf-8');
-    users = JSON.parse(usersData);
-    console.log("Users data loaded successfully.");
-} catch (err) {
-    console.error("Error loading or parsing users.json:", err);
-    // Handle error appropriately, maybe exit or use default empty object
-    users = {};
+
+// Initialize files and directories asynchronously
+async function initializeFiles() {
+    try {
+        if (!fs.existsSync(dataDir)) {
+            await fsPromises.mkdir(dataDir);
+            console.log(`Created data directory at ${dataDir}`);
+        }
+
+        if (!fs.existsSync(usersFilePath)) {
+            await fsPromises.writeFile(usersFilePath, JSON.stringify({}, null, 2));
+            console.log(`Created empty users file at ${usersFilePath}`);
+        }
+
+        if (!fs.existsSync(logsFilePath)) {
+            await fsPromises.writeFile(logsFilePath, JSON.stringify([], null, 2));
+            console.log(`Created empty logs file at ${logsFilePath}`);
+        }
+
+        // Load users from users.json
+        const usersData = await fsPromises.readFile(usersFilePath, 'utf-8');
+        users = JSON.parse(usersData);
+        console.log("Users data loaded successfully.");
+    } catch (err) {
+        console.error("Initialization error:", err);
+    }
 }
 
+initializeFiles();
 
-// --- Helper Functions ---
-function saveUsers() {
+// Save users back to file asynchronously
+async function saveUsers() {
     try {
-        fs.writeFileSync(usersFilePath, JSON.stringify(users, null, 2));
+        await fsPromises.writeFile(usersFilePath, JSON.stringify(users, null, 2));
     } catch (err) {
         console.error("Error saving users.json:", err);
     }
 }
 
-function logActivity(email, action) {
+// Log user activity with timestamp
+async function logActivity(email, action) {
     try {
         let logs = [];
-        // Read existing logs carefully
         if (fs.existsSync(logsFilePath)) {
-            const logData = fs.readFileSync(logsFilePath, 'utf-8');
-             try {
+            const logData = await fsPromises.readFile(logsFilePath, 'utf-8');
+            try {
                 logs = JSON.parse(logData);
-                 if (!Array.isArray(logs)) { // Ensure it's an array
+                if (!Array.isArray(logs)) {
                     console.warn("Logs file was not an array, resetting.");
                     logs = [];
-                 }
-             } catch (parseErr) {
+                }
+            } catch (parseErr) {
                 console.error("Error parsing logs file, resetting logs:", parseErr);
-                logs = []; // Reset if parsing fails
-             }
+                logs = [];
+            }
         }
         logs.push({ email: email || 'N/A', action, timestamp: new Date().toISOString() });
-        fs.writeFileSync(logsFilePath, JSON.stringify(logs, null, 2));
+        await fsPromises.writeFile(logsFilePath, JSON.stringify(logs, null, 2));
     } catch (err) {
         console.error("Error logging activity:", err);
     }
 }
-/* -------- NEW HELPERS START -------- */
+
+// Helper to add a question to a DOCX document
 function addQuestionParagraph(docChildren, number, text) {
     docChildren.push(
         new Paragraph({
@@ -130,15 +123,17 @@ function addQuestionParagraph(docChildren, number, text) {
     );
 }
 
+// Helper to add an option (MCQ) to a DOCX document
 function addOptionParagraph(docChildren, text) {
     docChildren.push(
         new Paragraph({
             children: [ new TextRun({ text, size: 24 }) ],
-            indent: { left: 720 },   // 0.5"
+            indent: { left: 720 },
             spacing: { after: 40 }
         })
     );
 }
+
 // --- Routes ---
 
 // Basic Health Check Route
@@ -148,7 +143,7 @@ app.get('/', (req, res) => {
 
 
 // Login Route
-app.post('/login', (req, res) => {
+app.post('/login', async (req, res) => {
     const { email, password } = req.body;
 							
 
@@ -159,10 +154,10 @@ app.post('/login', (req, res) => {
     const user = users[email];
 
     if (user && user.password === password) {
-        logActivity(email, 'Login Success');
+        await logActivity(email, 'Login Success');
         res.status(200).json({ message: 'Login successful', email });
     } else {
-        logActivity(email, 'Login Failed');
+        await logActivity(email, 'Login Failed');
 		  
         res.status(401).json({ message: 'Invalid credentials' });
     }
@@ -196,7 +191,7 @@ app.post('/generate', async (req, res) => {
 
     // Basic Input Validation
     if (!curriculum || !className || !subject || !questionDetails || !Array.isArray(questionDetails) || questionDetails.length === 0) {
-        logActivity(email, 'Generate Failed - Missing Parameters');
+        await logActivity(email, 'Generate Failed - Missing Parameters');
         return res.status(400).json({ message: 'Missing required generation parameters.' });
 		 
     }
@@ -297,13 +292,13 @@ app.post('/generate', async (req, res) => {
             users[email].tokens_used = (users[email].tokens_used || 0) + usage.total_tokens;
             saveUsers();
         }
-        logActivity(email, `Generated Questions - Subject: ${subject}, Class: ${className}, Tokens: ${usage.total_tokens}`);
+        await logActivity(email, `Generated Questions - Subject: ${subject}, Class: ${className}, Tokens: ${usage.total_tokens}`);
 
         res.json({ questions: generatedQuestions });
 
     } catch (error) {
         console.error("Error during question generation:", error.response ? JSON.stringify(error.response.data, null, 2) : error.message);
-        logActivity(email, `Generate Failed - Error: ${error.message}`);
+        await logActivity(email, `Generate Failed - Error: ${error.message}`);
         res.status(error.response?.status || 500).json({ message: `Error generating questions: ${error.response?.data?.error?.message || error.message}` });
     }
 });
@@ -316,19 +311,19 @@ app.post('/download-docx', async (req, res) => {
 
     // --- Input Validation ---
     if (!subject || typeof subject !== 'string' || subject.trim() === '') {
-        logActivity(email, 'Download Failed - Missing Subject');
+        await logActivity(email, 'Download Failed - Missing Subject');
         return res.status(400).json({ message: "Invalid input: Subject is required." });
     }
     if (!metadata || typeof metadata !== 'object') {
-        logActivity(email, 'Download Failed - Missing Metadata');
+        await logActivity(email, 'Download Failed - Missing Metadata');
         return res.status(400).json({ message: "Invalid input: Metadata is required." });
     }
      if (!sections || !Array.isArray(sections)) {
-        logActivity(email, 'Download Failed - Invalid Sections');
+        await logActivity(email, 'Download Failed - Invalid Sections');
         return res.status(400).json({ message: "Invalid input: Sections must be an array." });
     }
     if (!answerKey || !Array.isArray(answerKey)) {
-        logActivity(email, 'Download Failed - Invalid Answer Key');
+        await logActivity(email, 'Download Failed - Invalid Answer Key');
         return res.status(400).json({ message: "Invalid input: Answer Key must be an array." });
     }
 
@@ -464,7 +459,7 @@ app.post('/download-docx', async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
         res.setHeader('Content-Length', buffer.length);
-        logActivity(email, `Download Success - Subject: ${subject}, Class: ${metadata.className}`);
+        await logActivity(email, `Download Success - Subject: ${subject}, Class: ${metadata.className}`);
         res.send(buffer);
 
 														 
@@ -473,17 +468,17 @@ app.post('/download-docx', async (req, res) => {
 					 
     } catch (error) {
         console.error(`Error generating .docx for ${subject}, ${metadata.className}:`, error);
-        logActivity(email, `Download Failed DOCX - Error: ${error.message}`);
+        await logActivity(email, `Download Failed DOCX - Error: ${error.message}`);
         if (!res.headersSent) {
              res.status(500).json({ message: `Failed to generate Word file on server: ${error.message}` });
         }
     }
 });
 
-// --- Error Handling Middleware (Basic Example) ---
-app.use((err, req, res, next) => {
+// --- Error Handling Middleware 
+app.use( async (err, req, res, next) => {
     console.error("Unhandled error:", err.stack);
-    logActivity('SYSTEM', `Unhandled Error - ${err.message}`);
+    await logActivity('SYSTEM', `Unhandled Error - ${err.message}`);
     if (!res.headersSent) {
         res.status(500).send('Something broke!');
     }
@@ -491,23 +486,24 @@ app.use((err, req, res, next) => {
 
 
 // --- Start Server ---
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`Allowing requests from: ${config.FRONTEND_URL}`);
-    logActivity('SYSTEM', 'Server Started');
+    await logActivity('SYSTEM', 'Server Started');
 });
 
 // --- Graceful Shutdown ---
 process.on('SIGINT', () => {
     console.log('SIGINT signal received: closing HTTP server');
-    logActivity('SYSTEM', 'Server Shutdown Signal');
+	logActivity('SYSTEM', 'Server Shutdown Signal').then(() => {
     // Perform cleanup if needed (e.g., close database connections)
     // Give time for existing requests to finish?
     process.exit(0);
 });
-
-process.on('SIGTERM', () => {
+});
+process.on('SIGTERM',  () => {
     console.log('SIGTERM signal received: closing HTTP server');
-    logActivity('SYSTEM', 'Server Termination Signal');
+     logActivity('SYSTEM', 'Server Termination Signal').then(() => {
     process.exit(0);
+});
 });
