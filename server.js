@@ -53,8 +53,9 @@ const corsOptions = {
     methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
     credentials: true, // Allow cookies if needed later
     optionsSuccessStatus: 204 // For preflight requests
-	
 };
+console.log('FRONTEND_URL from ENV:', process.env.FRONTEND_URL);   //added to check
+console.log('config.FRONTEND_URL:', config.FRONTEND_URL);		// added to check
 app.use(cors(corsOptions));
 						   
 
