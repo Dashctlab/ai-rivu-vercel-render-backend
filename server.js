@@ -55,9 +55,6 @@ const corsOptions = {
     optionsSuccessStatus: 204 // For preflight requests
 };
 
-console.log('CORS ALLOWED ORIGIN:', config.FRONTEND_URL);		//added to check
-console.log('FRONTEND_URL from ENV:', process.env.FRONTEND_URL);   //added to check
-console.log('config.FRONTEND_URL:', config.FRONTEND_URL);		// added to check
 
 app.use(cors());
 app.options('*', cors());
