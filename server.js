@@ -59,12 +59,10 @@ console.log('CORS ALLOWED ORIGIN:', config.FRONTEND_URL);		//added to check
 console.log('FRONTEND_URL from ENV:', process.env.FRONTEND_URL);   //added to check
 console.log('config.FRONTEND_URL:', config.FRONTEND_URL);		// added to check
 
-
-app.use(cors(corsOptions));
-						   
-
-// Handle Preflight Requests explicitly for all routes
-app.options('*', cors(corsOptions));
+app.use(cors());
+app.options('*', cors());
+// app.use(cors(corsOptions));  --> only temp removed
+// app.options('*', cors(corsOptions)); --> only temp remove
 
 app.use(bodyParser.json({ limit: '10mb' })); // Increase payload size limit if needed
 app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
