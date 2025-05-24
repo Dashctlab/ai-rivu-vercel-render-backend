@@ -12,7 +12,7 @@ const { addQuestionParagraph, addOptionParagraph } = require('../utils/docxHelpe
  * POST /download-docx
  * Validates input, assembles the DOCX file and sends it as a download.
  */
-router.post('/download-docx', async (req, res) => {
+router.post('/', async (req, res) => {
     const { subject, metadata, sections, answerKey } = req.body;
     const email = req.headers['useremail'] || 'anonymous';
 
