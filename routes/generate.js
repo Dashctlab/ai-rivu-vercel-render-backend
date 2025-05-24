@@ -21,7 +21,7 @@ const openRouterHeaders = {
  * POST /generate
  * Accepts exam configuration and returns generated questions.
  */
-router.post('/generate', async (req, res) => {
+router.post('/', async (req, res) => {
     const {
         curriculum, className, subject, topic,
         difficultySplit, timeDuration, additionalConditions,
