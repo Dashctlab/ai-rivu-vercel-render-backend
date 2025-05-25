@@ -102,9 +102,29 @@ router.post('/', async (req, res) => {
 
         await logActivity(email, `Generated Questions - Subject: ${subject}, Class: ${className}, Tokens: ${usage.total_tokens}`);
         res.json({ questions: content });
-
-    } catch (error) {
-        console.error("OpenRouter Error:", error);
+        } catch (error) {
+            console.error("OpenRouter Error:", {
+            status: error.response?.status,
+            message: error.response?.data?.error?.message || error.message,
+        });
+    
+        await logActivity(email, `Generate Failed - Error: ${error.message}`);
+    
+        // Better error messages for users
+        if (error.response?.status === 401) {
+            res.status(500).json({ 
+                message: "Authentication error with AI service. Please contact support." 
+        });
+       } else if (error.response?.status === 429) {
+            res.status(500).json({ 
+            message: "AI service is busy. Please try again in a few moments." 
+        });
+        } else {
+            res.status(500).json({ 
+            message: "Error generating questions. Please try again." 
+        });
+    }
+}
         await logActivity(email, `Generate Failed - Error: ${error.message}`);
         res.status(500).json({ message: `Error generating questions: ${error.message}` });
     }
