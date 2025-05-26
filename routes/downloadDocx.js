@@ -1,16 +1,17 @@
 // routes/downloadDocx.js
-// Route handler for generating and sending downloadable DOCX question papers
+// Route handler for generating and sending downloadable DOCX question papers with enhanced tracking
 
 const express = require('express');
 const router = express.Router();
 
 const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType, BorderStyle, PageBreak } = require('docx');
-const logActivity = require('../utils/logger');
+const logActivity = require('../utils/enhancedLogger'); // CHANGED: Updated logger import
 const { addQuestionParagraph, addOptionParagraph } = require('../utils/docxHelpers');
 
 /**
  * POST /download-docx
  * Validates input, assembles the DOCX file and sends it as a download.
+ * Enhanced with detailed download tracking
  */
 router.post('/', async (req, res) => {
     const { subject, metadata, sections, answerKey } = req.body;
@@ -18,26 +19,56 @@ router.post('/', async (req, res) => {
 
     // Validate required fields
     if (!subject || typeof subject !== 'string' || subject.trim() === '') {
-        await logActivity(email, 'Download Failed - Missing Subject');
+        await logActivity(email, 'Download Failed - Missing Subject', {
+            reason: 'Subject is required',
+            providedSubject: subject,
+            requestTime: new Date().toISOString()
+        });
         return res.status(400).json({ message: "Invalid input: Subject is required." });
     }
     if (!metadata || typeof metadata !== 'object') {
-        await logActivity(email, 'Download Failed - Missing Metadata');
+        await logActivity(email, 'Download Failed - Missing Metadata', {
+            reason: 'Metadata is required',
+            providedMetadata: metadata,
+            requestTime: new Date().toISOString()
+        });
         return res.status(400).json({ message: "Invalid input: Metadata is required." });
     }
     if (!sections || !Array.isArray(sections)) {
-        await logActivity(email, 'Download Failed - Invalid Sections');
+        await logActivity(email, 'Download Failed - Invalid Sections', {
+            reason: 'Sections must be an array',
+            providedSections: sections,
+            sectionsType: typeof sections,
+            requestTime: new Date().toISOString()
+        });
         return res.status(400).json({ message: "Invalid input: Sections must be an array." });
     }
     if (!answerKey || !Array.isArray(answerKey)) {
-        await logActivity(email, 'Download Failed - Invalid Answer Key');
+        await logActivity(email, 'Download Failed - Invalid Answer Key', {
+            reason: 'Answer Key must be an array',
+            providedAnswerKey: answerKey,
+            answerKeyType: typeof answerKey,
+            requestTime: new Date().toISOString()
+        });
         return res.status(400).json({ message: "Invalid input: Answer Key must be an array." });
     }
 
     try {
+        // Log download attempt with detailed parameters
+        const downloadStartTime = new Date().toISOString();
+        await logActivity(email, 'Download Started', {
+            subject,
+            className: metadata.className,
+            totalMarks: metadata.totalMarks,
+            timeDuration: metadata.timeDuration,
+            sectionsCount: sections.length,
+            answerKeyLength: answerKey.length,
+            startTime: downloadStartTime
+        });
+
         const docChildren = [];
 
-        // --- Header Section ---
+        // --- Header Section --- (keeping existing DOCX generation logic)
         docChildren.push(
             new Paragraph({
                 text: 'School Name: ___________________________',
@@ -107,6 +138,7 @@ router.post('/', async (req, res) => {
         }));
 
         // --- Question Sections ---
+        let totalQuestions = 0;
         sections.forEach(sec => {
             docChildren.push(
                 new Paragraph({
@@ -121,6 +153,7 @@ router.post('/', async (req, res) => {
                 const lines = qBlock.split('\n').filter(Boolean);
                 addQuestionParagraph(docChildren, localNum++, lines[0]);
                 lines.slice(1).forEach(opt => addOptionParagraph(docChildren, opt));
+                totalQuestions++;
             });
 
             docChildren.push(new Paragraph({ text: '' }));
@@ -172,12 +205,44 @@ router.post('/', async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
         res.setHeader('Content-Length', buffer.length);
-        await logActivity(email, `Download Success - Subject: ${subject}, Class: ${metadata.className}`);
+
+        // Enhanced success logging with detailed metrics
+        await logActivity(email, 'Download Success - Subject: ' + subject + ', Class: ' + metadata.className, {
+            subject,
+            class: metadata.className,
+            totalMarks: metadata.totalMarks,
+            timeDuration: metadata.timeDuration,
+            fileName,
+            fileSize: buffer.length,
+            totalQuestions,
+            sectionsCount: sections.length,
+            answerKeyLength: answerKey.length,
+            downloadTime: new Date().toISOString(),
+            processingTimeMs: Date.now() - new Date(downloadStartTime).getTime(),
+            successful: true
+        });
+
         res.send(buffer);
 
     } catch (error) {
         console.error(`DOCX Generation Error:`, error);
-        await logActivity(email, `Download Failed DOCX - Error: ${error.message}`);
+        
+        // Enhanced error logging
+        await logActivity(email, 'Download Failed DOCX - Error: ' + error.message, {
+            subject,
+            class: metadata?.className,
+            errorType: 'DOCX_GENERATION_ERROR',
+            errorMessage: error.message,
+            errorStack: error.stack,
+            errorTime: new Date().toISOString(),
+            requestData: {
+                subject,
+                metadata,
+                sectionsCount: sections?.length || 0,
+                answerKeyLength: answerKey?.length || 0
+            }
+        });
+
         if (!res.headersSent) {
             res.status(500).json({ message: `Failed to generate Word file: ${error.message}` });
         }

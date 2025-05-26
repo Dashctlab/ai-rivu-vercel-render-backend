@@ -14,7 +14,7 @@ const bodyParser = require('body-parser');
 
 const config = require('./config');
 const { initializeFiles } = require('./utils/fileUtils');
-const logActivity = require('./utils/logger');
+const logActivity = require('./utils/enhancedLogger'); // CHANGED: Updated logger import
 const routes = require('./routes');
 
 const app = express();
@@ -30,7 +30,6 @@ const corsOptions = {
 
 // Middleware
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 
@@ -51,8 +50,12 @@ initializeFiles().then(() => {
     app.listen(PORT, async () => {
         console.log(`Server running on port ${PORT}`);
         console.log(`Allowing requests from: ${config.FRONTEND_URL}`);
+        console.log(`Admin dashboard available at: http://localhost:${PORT}/admin/dashboard`); // NEW
         await logActivity('SYSTEM', 'Server Started');
     });
+}).catch(err => {
+    console.error('Failed to initialize files:', err);
+    process.exit(1);
 });
 
 // Graceful shutdown
