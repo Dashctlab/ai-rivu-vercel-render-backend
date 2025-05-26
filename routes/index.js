@@ -13,10 +13,12 @@ router.get('/', (req, res) => {
 const loginRoute = require('./login');
 const generateRoute = require('./generate');
 const downloadDocxRoute = require('./downloadDocx');
+const adminRoute = require('./admin'); // NEW: Admin dashboard
 
 // Bind them to their respective paths
 router.use('/login', loginRoute);
 router.use('/generate', generateRoute);
 router.use('/download-docx', downloadDocxRoute);
+router.use('/admin', adminRoute); // NEW: Mount admin routes
 
 module.exports = router;
