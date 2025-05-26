@@ -1,12 +1,12 @@
 // routes/generate.js
-// Handles question paper generation using OpenRouter API
+// Handles question paper generation using OpenRouter API with enhanced tracking
 
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 
 const { getUsers, saveUsers } = require('../utils/fileUtils');
-const logActivity = require('../utils/logger');
+const logActivity = require('../utils/enhancedLogger'); // CHANGED: Updated logger import
 const config = require('../config');
 
 // Headers required by OpenRouter
@@ -20,6 +20,7 @@ const openRouterHeaders = {
 /**
  * POST /generate
  * Accepts exam configuration and returns generated questions.
+ * Enhanced with detailed generation tracking
  */
 router.post('/', async (req, res) => {
     const {
@@ -31,12 +32,32 @@ router.post('/', async (req, res) => {
     const email = req.headers['useremail'] || 'anonymous';
 
     if (!curriculum || !className || !subject || !Array.isArray(questionDetails) || questionDetails.length === 0) {
-        await logActivity(email, 'Generate Failed - Missing Parameters');
+        await logActivity(email, 'Generate Failed - Missing Parameters', {
+            missingFields: {
+                curriculum: !curriculum,
+                className: !className,
+                subject: !subject,
+                questionDetails: !Array.isArray(questionDetails) || questionDetails.length === 0
+            },
+            providedData: { curriculum, className, subject, questionDetailsCount: questionDetails?.length || 0 }
+        });
         return res.status(400).json({ message: 'Missing required generation parameters.' });
     }
 
     try {
-        // Construct prompt from request payload
+        // Log generation attempt with detailed parameters
+        await logActivity(email, 'Generate Started', {
+            curriculum,
+            className, 
+            subject,
+            topic,
+            difficultySplit,
+            timeDuration,
+            questionDetailsCount: questionDetails.length,
+            startTime: new Date().toISOString()
+        });
+
+        // Construct prompt from request payload (keeping existing logic)
         let prompt = `You are an expert school examination paper setter. Create a formal question paper with the following exact specifications:\n\n`;
         prompt += `**Core Details:**\n`;
         prompt += `- Curriculum Board: ${curriculum}\n`;
@@ -95,20 +116,48 @@ router.post('/', async (req, res) => {
         const users = getUsers();
         const usage = response.data.usage || { total_tokens: 0 };
 
+        // Update user tokens (maintaining existing logic)
         if (email !== 'anonymous' && users[email]) {
             users[email].tokens_used = (users[email].tokens_used || 0) + usage.total_tokens;
             await saveUsers();
         }
 
-        await logActivity(email, `Generated Questions - Subject: ${subject}, Class: ${className}, Tokens: ${usage.total_tokens}`);
+        // Enhanced success logging with detailed metrics
+        await logActivity(email, 'Generated Questions - Subject: ' + subject + ', Class: ' + className + ', Tokens: ' + usage.total_tokens, {
+            subject,
+            class: className,
+            curriculum,
+            topic,
+            tokens: usage.total_tokens,
+            promptTokens: usage.prompt_tokens || 0,
+            completionTokens: usage.completion_tokens || 0,
+            questionDetails: questionDetails,
+            difficultySplit,
+            timeDuration,
+            generationTime: new Date().toISOString(),
+            contentLength: content.length,
+            successful: true
+        });
+
         res.json({ questions: content });
+
     } catch (error) {
         console.error("OpenRouter Error:", {
             status: error.response?.status,
             message: error.response?.data?.error?.message || error.message,
         });
 
-        await logActivity(email, `Generate Failed - Error: ${error.message}`);
+        // Enhanced error logging
+        await logActivity(email, 'Generate Failed - Error: ' + error.message, {
+            subject,
+            class: className,
+            curriculum,
+            errorType: error.response?.status ? 'API_ERROR' : 'SYSTEM_ERROR',
+            statusCode: error.response?.status,
+            errorMessage: error.response?.data?.error?.message || error.message,
+            errorTime: new Date().toISOString(),
+            requestData: { curriculum, className, subject, questionDetailsCount: questionDetails.length }
+        });
 
         if (error.response?.status === 401) {
             res.status(500).json({ 
