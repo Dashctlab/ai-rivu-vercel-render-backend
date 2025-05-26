@@ -56,4 +56,16 @@ initializeFiles().then(() => {
     });
 }).catch(err => {
     console.error('Failed to initialize files:', err);
-    process.exit
+    process.exit(1);
+});
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+    console.log('SIGINT received: closing HTTP server');
+    logActivity('SYSTEM', 'Server Shutdown Signal').then(() => process.exit(0));
+});
+
+process.on('SIGTERM', () => {
+    console.log('SIGTERM received: closing HTTP server');
+    logActivity('SYSTEM', 'Server Termination Signal').then(() => process.exit(0));
+});
