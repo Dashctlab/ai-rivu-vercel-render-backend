@@ -1,6 +1,6 @@
 {
   "admin@example.com": {
-    "password": "password123",
+    "password": "admin123",
     "tokens_used": 0,
     "token_limit": 10000
   },
