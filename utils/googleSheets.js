@@ -103,7 +103,7 @@ class GoogleSheetsDB {
 
             await this.sheets.spreadsheets.values.append({
                 spreadsheetId: this.sheetId,
-                range: 'Activity_Logs!A:I',
+                range: 'activity_logs!A:I',
                 valueInputOption: 'RAW',
                 resource: { values }
             });
@@ -126,7 +126,7 @@ class GoogleSheetsDB {
             // First, try to find existing user row
             const response = await this.sheets.spreadsheets.values.get({
                 spreadsheetId: this.sheetId,
-                range: 'User_Stats!A:J'
+                range: 'user_stats!A:J'
             });
 
             const rows = response.data.values || [];
@@ -157,7 +157,7 @@ class GoogleSheetsDB {
                 // Update existing user
                 await this.sheets.spreadsheets.values.update({
                     spreadsheetId: this.sheetId,
-                    range: `User_Stats!A${userRowIndex}:J${userRowIndex}`,
+                    range: `user_stats!A${userRowIndex}:J${userRowIndex}`,
                     valueInputOption: 'RAW',
                     resource: { values }
                 });
@@ -165,7 +165,7 @@ class GoogleSheetsDB {
                 // Add new user
                 await this.sheets.spreadsheets.values.append({
                     spreadsheetId: this.sheetId,
-                    range: 'User_Stats!A:J',
+                    range: 'user_stats!A:J',
                     valueInputOption: 'RAW',
                     resource: { values }
                 });
@@ -186,7 +186,7 @@ class GoogleSheetsDB {
 
             const response = await this.sheets.spreadsheets.values.get({
                 spreadsheetId: this.sheetId,
-                range: 'User_Stats!A:J'
+                range: 'user_stats!A:J'
             });
 
             const rows = response.data.values || [];
@@ -226,7 +226,7 @@ class GoogleSheetsDB {
 
             const response = await this.sheets.spreadsheets.values.get({
                 spreadsheetId: this.sheetId,
-                range: 'Activity_Logs!A:I'
+                range: 'activity_logs!A:I'
             });
 
             const rows = response.data.values || [];
