@@ -3,8 +3,14 @@ node_modules/
 .env
 *.log
 
-# Data
-data/
+# Sensitive data only
+data/users.json
+data/activity_logs.json  
+data/user_stats.json
+
+# Keep data directory structure
+!data/
+!data/.gitkeep
 
 # Mac & system
 .DS_Store
