@@ -13,32 +13,43 @@ router.post('/', async (req, res) => {
     const { subject, metadata, sections, answerKey } = req.body;
     const email = req.headers['useremail'] || 'anonymous';
 
-    // Validation (keeping existing logic)
+  // User-friendly validation with better error messages
     if (!subject || typeof subject !== 'string' || subject.trim() === '') {
         await logActivity(email, 'Download Failed - Missing Subject', {
             reason: 'Subject is required',
             providedSubject: subject,
             requestTime: new Date().toISOString()
         });
-        return res.status(400).json({ message: "Invalid input: Metadata is required." });
+        return res.status(400).json({ message: "Please generate a question paper first before downloading." });
     }
+    
+    if (!metadata || typeof metadata !== 'object') {
+        await logActivity(email, 'Download Failed - Missing Metadata', {
+            reason: 'Paper details are missing',
+            providedMetadata: metadata,
+            requestTime: new Date().toISOString()
+        });
+        return res.status(400).json({ message: "Question paper details are missing. Please generate the paper again." });
+    }
+    
     if (!sections || !Array.isArray(sections)) {
         await logActivity(email, 'Download Failed - Invalid Sections', {
-            reason: 'Sections must be an array',
+            reason: 'Questions are missing',
             providedSections: sections,
             sectionsType: typeof sections,
             requestTime: new Date().toISOString()
         });
-        return res.status(400).json({ message: "Invalid input: Sections must be an array." });
+        return res.status(400).json({ message: "No questions found to download. Please generate a question paper first." });
     }
+    
     if (!answerKey || !Array.isArray(answerKey)) {
         await logActivity(email, 'Download Failed - Invalid Answer Key', {
-            reason: 'Answer Key must be an array',
+            reason: 'Answer key is missing',
             providedAnswerKey: answerKey,
             answerKeyType: typeof answerKey,
             requestTime: new Date().toISOString()
         });
-        return res.status(400).json({ message: "Invalid input: Answer Key must be an array." });
+        return res.status(400).json({ message: "Answer key is missing. Please generate a complete question paper first." });
     }
 
     try {
@@ -460,7 +471,7 @@ router.post('/', async (req, res) => {
                 children: docChildren
             }]
         });
-
+        
         const buffer = await Packer.toBuffer(doc);
         const safeSubject = subject.replace(/[^a-z0-9]/gi, '_').toLowerCase();
         const safeClassName = metadata.className?.replace(/\s+/g, '_') || 'unknown_class';
@@ -512,12 +523,4 @@ router.post('/', async (req, res) => {
     }
 });
 
-module.exports = router;.status(400).json({ message: "Invalid input: Subject is required." });
-    }
-    if (!metadata || typeof metadata !== 'object') {
-        await logActivity(email, 'Download Failed - Missing Metadata', {
-            reason: 'Metadata is required',
-            providedMetadata: metadata,
-            requestTime: new Date().toISOString()
-        });
-        return res
+module.exports = router;
