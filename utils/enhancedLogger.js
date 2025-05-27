@@ -1,6 +1,4 @@
-// utils/enhancedLogger.js
-// Enhanced activity logger with user-specific tracking and analytics
-
+// utils/enhancedLogger.js - Version 2 with detailed question tracking
 const fs = require('fs');
 const fsPromises = fs.promises;
 const path = require('path');
@@ -27,9 +25,6 @@ class EnhancedLogger {
 
     /**
      * Main logging function - maintains backward compatibility
-     * @param {string} email - User email or SYSTEM
-     * @param {string} action - Description of the action
-     * @param {object} details - Optional additional details
      */
     async logActivity(email, action, details = {}) {
         try {
@@ -55,7 +50,7 @@ class EnhancedLogger {
             logs.push(logEntry);
             await fsPromises.writeFile(logsFilePath, JSON.stringify(logs, null, 2));
 
-            // Update user statistics if it's a real user (not SYSTEM)
+            // Update user statistics if it's a real user
             if (email && email !== 'N/A' && email !== 'SYSTEM' && email !== 'anonymous') {
                 await this.updateUserStats(email, action, details);
             }
@@ -66,7 +61,7 @@ class EnhancedLogger {
     }
 
     /**
-     * Update user-specific statistics
+     * Enhanced user statistics tracking
      */
     async updateUserStats(email, action, details) {
         try {
@@ -91,14 +86,18 @@ class EnhancedLogger {
                     classes: {},
                     boards: {},
                     questionTypes: {},
-                    tokensUsed: 0
+                    tokensUsed: 0,
+                    // Enhanced tracking
+                    difficulties: {},
+                    timeDurations: {},
+                    avgQuestionsPerPaper: 0
                 };
             }
 
             const userStats = stats[email];
             userStats.lastActivity = new Date().toISOString();
 
-            // Track specific actions
+            // Track specific actions with enhanced details
             switch(true) {
                 case action.includes('Login Success'):
                     userStats.totalLogins++;
@@ -107,43 +106,80 @@ class EnhancedLogger {
                 case action.includes('Generated Questions'):
                     userStats.totalPapersGenerated++;
                     
-                    // Extract details from action string or details object
-                    if (details.subject || action.includes('Subject:')) {
-                        const subject = details.subject || action.match(/Subject: ([^,]+)/)?.[1];
-                        if (subject) {
-                            userStats.subjects[subject] = (userStats.subjects[subject] || 0) + 1;
-                        }
+                    // Track subject
+                    if (details.subject) {
+                        userStats.subjects[details.subject] = (userStats.subjects[details.subject] || 0) + 1;
                     }
                     
-                    if (details.class || action.includes('Class:')) {
-                        const className = details.class || action.match(/Class: ([^,]+)/)?.[1];
-                        if (className) {
-                            userStats.classes[className] = (userStats.classes[className] || 0) + 1;
-                        }
+                    // Track class
+                    if (details.class || details.className) {
+                        const className = details.class || details.className;
+                        userStats.classes[className] = (userStats.classes[className] || 0) + 1;
                     }
 
-                    if (details.tokens || action.includes('Tokens:')) {
-                        const tokens = details.tokens || parseInt(action.match(/Tokens: (\d+)/)?.[1] || '0');
-                        userStats.tokensUsed += tokens;
+                    // Track curriculum/board
+                    if (details.curriculum) {
+                        userStats.boards[details.curriculum] = (userStats.boards[details.curriculum] || 0) + 1;
+                    }
+
+                    // Track question types with detailed breakdown
+                    if (details.questionDetails && Array.isArray(details.questionDetails)) {
+                        details.questionDetails.forEach(qDetail => {
+                            if (qDetail.type) {
+                                userStats.questionTypes[qDetail.type] = (userStats.questionTypes[qDetail.type] || 0) + (qDetail.num || 1);
+                            }
+                        });
+                    }
+
+                    // Track difficulty preferences
+                    if (details.difficultySplit) {
+                        userStats.difficulties[details.difficultySplit] = (userStats.difficulties[details.difficultySplit] || 0) + 1;
+                    }
+
+                    // Track time durations
+                    if (details.timeDuration) {
+                        const duration = `${details.timeDuration} min`;
+                        userStats.timeDurations[duration] = (userStats.timeDurations[duration] || 0) + 1;
+                    }
+
+                    // Update average questions per paper
+                    if (details.questionDetails) {
+                        const totalQuestions = details.questionDetails.reduce((sum, q) => sum + (q.num || 0), 0);
+                        const currentAvg = userStats.avgQuestionsPerPaper || 0;
+                        const paperCount = userStats.totalPapersGenerated;
+                        userStats.avgQuestionsPerPaper = Math.round(((currentAvg * (paperCount - 1)) + totalQuestions) / paperCount);
+                    }
+
+                    // Track tokens
+                    if (details.tokens) {
+                        userStats.tokensUsed += details.tokens;
                     }
                     break;
 
                 case action.includes('Download Success'):
                     userStats.totalDownloads++;
-                    
-                    // Extract subject and class from action
-                    if (action.includes('Subject:')) {
-                        const subject = action.match(/Subject: ([^,]+)/)?.[1];
-                        if (subject && !userStats.subjects[subject]) {
-                            userStats.subjects[subject] = 1;
-                        }
-                    }
                     break;
             }
 
             await fsPromises.writeFile(userStatsPath, JSON.stringify(stats, null, 2));
         } catch (error) {
             console.error('Error updating user stats:', error);
+        }
+    }
+
+    /**
+     * Get detailed activity logs for admin dashboard
+     */
+    async getDetailedActivityLogs(limit = 100) {
+        try {
+            if (!fs.existsSync(logsFilePath)) return [];
+            
+            const data = await fsPromises.readFile(logsFilePath, 'utf-8');
+            const logs = JSON.parse(data);
+            return logs.slice(-limit);
+        } catch (error) {
+            console.error('Error getting detailed logs:', error);
+            return [];
         }
     }
 
@@ -164,7 +200,7 @@ class EnhancedLogger {
     }
 
     /**
-     * Get all user statistics for admin dashboard
+     * Get all user statistics
      */
     async getAllUserStats() {
         try {
@@ -179,7 +215,7 @@ class EnhancedLogger {
     }
 
     /**
-     * Get usage analytics
+     * Enhanced usage analytics
      */
     async getUsageAnalytics() {
         try {
@@ -193,7 +229,12 @@ class EnhancedLogger {
                 activeUsers: 0,
                 popularSubjects: {},
                 popularClasses: {},
-                downloadRate: 0
+                popularBoards: {},
+                popularQuestionTypes: {},
+                popularDifficulties: {},
+                popularTimeDurations: {},
+                downloadRate: 0,
+                avgQuestionsPerUser: 0
             };
 
             const now = new Date();
@@ -210,20 +251,28 @@ class EnhancedLogger {
                     analytics.activeUsers++;
                 }
 
-                // Aggregate popular subjects
-                Object.entries(userStat.subjects || {}).forEach(([subject, count]) => {
-                    analytics.popularSubjects[subject] = (analytics.popularSubjects[subject] || 0) + count;
-                });
-
-                // Aggregate popular classes
-                Object.entries(userStat.classes || {}).forEach(([className, count]) => {
-                    analytics.popularClasses[className] = (analytics.popularClasses[className] || 0) + count;
+                // Aggregate data
+                ['subjects', 'classes', 'boards', 'questionTypes', 'difficulties', 'timeDurations'].forEach(category => {
+                    const analyticsKey = category === 'classes' ? 'popularClasses' : 
+                                       category === 'subjects' ? 'popularSubjects' :
+                                       category === 'boards' ? 'popularBoards' :
+                                       category === 'questionTypes' ? 'popularQuestionTypes' :
+                                       category === 'difficulties' ? 'popularDifficulties' :
+                                       'popularTimeDurations';
+                    
+                    Object.entries(userStat[category] || {}).forEach(([key, count]) => {
+                        analytics[analyticsKey][key] = (analytics[analyticsKey][key] || 0) + count;
+                    });
                 });
             });
 
-            // Calculate download rate
+            // Calculate rates and averages
             analytics.downloadRate = analytics.totalPapersGenerated > 0 
                 ? ((analytics.totalDownloads / analytics.totalPapersGenerated) * 100).toFixed(1)
+                : 0;
+
+            analytics.avgQuestionsPerUser = analytics.totalUsers > 0 
+                ? Math.round(analytics.totalPapersGenerated / analytics.totalUsers)
                 : 0;
 
             return analytics;
@@ -234,7 +283,7 @@ class EnhancedLogger {
     }
 }
 
-// Create and export instance for backward compatibility
+// Create and export instance
 const enhancedLogger = new EnhancedLogger();
 
 // Export the logActivity function directly for backward compatibility
