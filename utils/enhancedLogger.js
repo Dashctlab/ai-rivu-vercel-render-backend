@@ -1,7 +1,8 @@
-// utils/enhancedLogger.js - Version 2 with detailed question tracking
+// utils/enhancedLogger.js - Version 3 with Google Sheets integration
 const fs = require('fs');
 const fsPromises = fs.promises;
 const path = require('path');
+const googleSheetsDB = require('./googleSheets');
 
 const dataDir = path.join(__dirname, '../data');
 const logsFilePath = path.join(dataDir, 'activity_logs.json');
@@ -24,11 +25,33 @@ class EnhancedLogger {
     }
 
     /**
-     * Main logging function - maintains backward compatibility
+     * Main logging function - now writes to both JSON and Google Sheets
      */
     async logActivity(email, action, details = {}) {
         try {
-            // Maintain existing log format for backward compatibility
+            // Write to Google Sheets (primary storage)
+            await googleSheetsDB.logActivity(email, action, details);
+
+            // Also write to JSON file (backup/fallback)
+            await this.logToJSONFile(email, action, details);
+
+            // Update user statistics if it's a real user
+            if (email && email !== 'N/A' && email !== 'SYSTEM' && email !== 'anonymous') {
+                await this.updateUserStats(email, action, details);
+            }
+
+        } catch (err) {
+            console.error("Error logging activity:", err);
+            // Fallback to JSON only if Google Sheets fails
+            await this.logToJSONFile(email, action, details);
+        }
+    }
+
+    /**
+     * Backup logging to JSON file
+     */
+    async logToJSONFile(email, action, details) {
+        try {
             let logs = [];
             if (fs.existsSync(logsFilePath)) {
                 const data = await fsPromises.readFile(logsFilePath, 'utf-8');
@@ -48,35 +71,29 @@ class EnhancedLogger {
             };
 
             logs.push(logEntry);
-            await fsPromises.writeFile(logsFilePath, JSON.stringify(logs, null, 2));
-
-            // Update user statistics if it's a real user
-            if (email && email !== 'N/A' && email !== 'SYSTEM' && email !== 'anonymous') {
-                await this.updateUserStats(email, action, details);
+            
+            // Keep only last 1000 entries to prevent file from growing too large
+            if (logs.length > 1000) {
+                logs = logs.slice(-1000);
             }
 
-        } catch (err) {
-            console.error("Error logging activity:", err);
+            await fsPromises.writeFile(logsFilePath, JSON.stringify(logs, null, 2));
+        } catch (error) {
+            console.error("Error logging to JSON file:", error);
         }
     }
 
     /**
-     * Enhanced user statistics tracking
+     * Enhanced user statistics tracking - now syncs with Google Sheets
      */
     async updateUserStats(email, action, details) {
         try {
-            let stats = {};
-            if (fs.existsSync(userStatsPath)) {
-                const data = await fsPromises.readFile(userStatsPath, 'utf-8');
-                try {
-                    stats = JSON.parse(data);
-                } catch (e) {
-                    stats = {};
-                }
-            }
+            // Get current stats from Google Sheets first
+            let allStats = await googleSheetsDB.getAllUserStats();
+            let userStats = allStats[email];
 
-            if (!stats[email]) {
-                stats[email] = {
+            if (!userStats) {
+                userStats = {
                     totalLogins: 0,
                     totalPapersGenerated: 0,
                     totalDownloads: 0,
@@ -87,14 +104,12 @@ class EnhancedLogger {
                     boards: {},
                     questionTypes: {},
                     tokensUsed: 0,
-                    // Enhanced tracking
                     difficulties: {},
                     timeDurations: {},
                     avgQuestionsPerPaper: 0
                 };
             }
 
-            const userStats = stats[email];
             userStats.lastActivity = new Date().toISOString();
 
             // Track specific actions with enhanced details
@@ -161,67 +176,114 @@ class EnhancedLogger {
                     break;
             }
 
-            await fsPromises.writeFile(userStatsPath, JSON.stringify(stats, null, 2));
+            // Update both Google Sheets and local JSON
+            await googleSheetsDB.updateUserStats(email, userStats);
+            await this.updateLocalUserStats(email, userStats);
+
         } catch (error) {
             console.error('Error updating user stats:', error);
         }
     }
 
     /**
-     * Get detailed activity logs for admin dashboard
+     * Update local JSON file (backup)
+     */
+    async updateLocalUserStats(email, userStats) {
+        try {
+            let stats = {};
+            if (fs.existsSync(userStatsPath)) {
+                const data = await fsPromises.readFile(userStatsPath, 'utf-8');
+                try {
+                    stats = JSON.parse(data);
+                } catch (e) {
+                    stats = {};
+                }
+            }
+
+            stats[email] = userStats;
+            await fsPromises.writeFile(userStatsPath, JSON.stringify(stats, null, 2));
+        } catch (error) {
+            console.error('Error updating local user stats:', error);
+        }
+    }
+
+    /**
+     * Get detailed activity logs - now from Google Sheets
      */
     async getDetailedActivityLogs(limit = 100) {
         try {
-            if (!fs.existsSync(logsFilePath)) return [];
-            
-            const data = await fsPromises.readFile(logsFilePath, 'utf-8');
-            const logs = JSON.parse(data);
-            return logs.slice(-limit);
+            return await googleSheetsDB.getDetailedActivityLogs(limit);
         } catch (error) {
-            console.error('Error getting detailed logs:', error);
-            return [];
+            console.error('Error getting detailed logs from Google Sheets, falling back to JSON:', error);
+            // Fallback to JSON file
+            try {
+                if (!fs.existsSync(logsFilePath)) return [];
+                
+                const data = await fsPromises.readFile(logsFilePath, 'utf-8');
+                const logs = JSON.parse(data);
+                return logs.slice(-limit);
+            } catch (fallbackError) {
+                console.error('Fallback to JSON also failed:', fallbackError);
+                return [];
+            }
         }
     }
 
     /**
-     * Get user statistics
+     * Get user statistics - now from Google Sheets
      */
     async getUserStats(email) {
         try {
-            if (!fs.existsSync(userStatsPath)) return null;
-            
-            const data = await fsPromises.readFile(userStatsPath, 'utf-8');
-            const stats = JSON.parse(data);
-            return stats[email] || null;
+            const allStats = await googleSheetsDB.getAllUserStats();
+            return allStats[email] || null;
         } catch (error) {
-            console.error('Error getting user stats:', error);
-            return null;
+            console.error('Error getting user stats from Google Sheets, falling back to JSON:', error);
+            // Fallback to JSON file
+            try {
+                if (!fs.existsSync(userStatsPath)) return null;
+                
+                const data = await fsPromises.readFile(userStatsPath, 'utf-8');
+                const stats = JSON.parse(data);
+                return stats[email] || null;
+            } catch (fallbackError) {
+                console.error('Fallback to JSON also failed:', fallbackError);
+                return null;
+            }
         }
     }
 
     /**
-     * Get all user statistics
+     * Get all user statistics - now from Google Sheets
      */
     async getAllUserStats() {
         try {
-            if (!fs.existsSync(userStatsPath)) return {};
-            
-            const data = await fsPromises.readFile(userStatsPath, 'utf-8');
-            return JSON.parse(data);
+            return await googleSheetsDB.getAllUserStats();
         } catch (error) {
-            console.error('Error getting all user stats:', error);
-            return {};
+            console.error('Error getting all user stats from Google Sheets, falling back to JSON:', error);
+            // Fallback to JSON file
+            try {
+                if (!fs.existsSync(userStatsPath)) return {};
+                
+                const data = await fsPromises.readFile(userStatsPath, 'utf-8');
+                return JSON.parse(data);
+            } catch (fallbackError) {
+                console.error('Fallback to JSON also failed:', fallbackError);
+                return {};
+            }
         }
     }
 
     /**
-     * Enhanced usage analytics
+     * Enhanced usage analytics - now from Google Sheets
      */
     async getUsageAnalytics() {
         try {
-            const stats = await this.getAllUserStats();
-            const analytics = {
-                totalUsers: Object.keys(stats).length,
+            return await googleSheetsDB.getUsageAnalytics();
+        } catch (error) {
+            console.error('Error getting usage analytics from Google Sheets:', error);
+            // Return basic fallback analytics
+            return {
+                totalUsers: 0,
                 totalPapersGenerated: 0,
                 totalDownloads: 0,
                 totalLogins: 0,
@@ -229,56 +291,9 @@ class EnhancedLogger {
                 activeUsers: 0,
                 popularSubjects: {},
                 popularClasses: {},
-                popularBoards: {},
                 popularQuestionTypes: {},
-                popularDifficulties: {},
-                popularTimeDurations: {},
-                downloadRate: 0,
-                avgQuestionsPerUser: 0
+                downloadRate: 0
             };
-
-            const now = new Date();
-            const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-            Object.values(stats).forEach(userStat => {
-                analytics.totalPapersGenerated += userStat.totalPapersGenerated || 0;
-                analytics.totalDownloads += userStat.totalDownloads || 0;
-                analytics.totalLogins += userStat.totalLogins || 0;
-                analytics.totalTokensUsed += userStat.tokensUsed || 0;
-
-                // Check if user was active in last 7 days
-                if (new Date(userStat.lastActivity) > sevenDaysAgo) {
-                    analytics.activeUsers++;
-                }
-
-                // Aggregate data
-                ['subjects', 'classes', 'boards', 'questionTypes', 'difficulties', 'timeDurations'].forEach(category => {
-                    const analyticsKey = category === 'classes' ? 'popularClasses' : 
-                                       category === 'subjects' ? 'popularSubjects' :
-                                       category === 'boards' ? 'popularBoards' :
-                                       category === 'questionTypes' ? 'popularQuestionTypes' :
-                                       category === 'difficulties' ? 'popularDifficulties' :
-                                       'popularTimeDurations';
-                    
-                    Object.entries(userStat[category] || {}).forEach(([key, count]) => {
-                        analytics[analyticsKey][key] = (analytics[analyticsKey][key] || 0) + count;
-                    });
-                });
-            });
-
-            // Calculate rates and averages
-            analytics.downloadRate = analytics.totalPapersGenerated > 0 
-                ? ((analytics.totalDownloads / analytics.totalPapersGenerated) * 100).toFixed(1)
-                : 0;
-
-            analytics.avgQuestionsPerUser = analytics.totalUsers > 0 
-                ? Math.round(analytics.totalPapersGenerated / analytics.totalUsers)
-                : 0;
-
-            return analytics;
-        } catch (error) {
-            console.error('Error getting usage analytics:', error);
-            return null;
         }
     }
 }
