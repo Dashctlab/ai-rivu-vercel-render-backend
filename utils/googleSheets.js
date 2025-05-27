@@ -21,7 +21,11 @@ class GoogleSheetsDB {
                 process.env.STAGING_SHEET_ID;
 
             console.log(`Initializing Google Sheets for ${isProduction ? 'PRODUCTION' : 'STAGING'} environment`);
-            console.log(`Using Sheet ID: ${this.sheetId?.substring(0, 10)}...`);
+            console.log(`Using Sheet ID: ${this.sheetId}`);
+            
+            if (!this.sheetId) {
+                throw new Error(`Sheet ID not found. Check ${isProduction ? 'PROD_SHEET_ID' : 'STAGING_SHEET_ID'} environment variable`);
+            }
 
             // Simplified JSON key approach - no base64 encoding
             let auth;
@@ -126,7 +130,7 @@ class GoogleSheetsDB {
             // First, try to find existing user row
             const response = await this.sheets.spreadsheets.values.get({
                 spreadsheetId: this.sheetId,
-                range: 'user_stats!A:J'
+                range: 'user_stats!A:J'  // Back to A:J for 10 columns
             });
 
             const rows = response.data.values || [];
@@ -141,23 +145,23 @@ class GoogleSheetsDB {
             }
 
             const values = [[
-                email,
-                stats.totalLogins || 0,
-                stats.totalPapersGenerated || 0,
-                stats.totalDownloads || 0,
-                JSON.stringify(stats.subjects || {}),
-                JSON.stringify(stats.classes || {}),
-                JSON.stringify(stats.questionTypes || {}),
-                stats.tokensUsed || 0,
-                stats.firstActivity || new Date().toISOString(),
-                stats.lastActivity || new Date().toISOString()
+                email,                                           // A: User_Email
+                stats.totalLogins || 0,                         // B: Total_Logins  
+                stats.totalPapersGenerated || 0,                // C: Papers_Generated
+                stats.totalDownloads || 0,                      // D: Downloads
+                JSON.stringify(stats.classes || {}),            // E: Classes_Used
+                JSON.stringify(stats.subjects || {}),           // F: Subjects_Used
+                JSON.stringify(stats.questionTypes || {}),      // G: Question_Types_Used
+                stats.tokensUsed || 0,                          // H: Tokens_Used
+                stats.firstActivity || new Date().toISOString(), // I: First_Activity
+                stats.lastActivity || new Date().toISOString()   // J: Last_Activity
             ]];
 
             if (userRowIndex > 0) {
                 // Update existing user
                 await this.sheets.spreadsheets.values.update({
                     spreadsheetId: this.sheetId,
-                    range: `user_stats!A${userRowIndex}:J${userRowIndex}`,
+                    range: `user_stats!A${userRowIndex}:J${userRowIndex}`,  // Back to J for 10 columns
                     valueInputOption: 'RAW',
                     resource: { values }
                 });
@@ -165,7 +169,7 @@ class GoogleSheetsDB {
                 // Add new user
                 await this.sheets.spreadsheets.values.append({
                     spreadsheetId: this.sheetId,
-                    range: 'user_stats!A:J',
+                    range: 'user_stats!A:J',  // Back to A:J for 10 columns
                     valueInputOption: 'RAW',
                     resource: { values }
                 });
@@ -186,7 +190,7 @@ class GoogleSheetsDB {
 
             const response = await this.sheets.spreadsheets.values.get({
                 spreadsheetId: this.sheetId,
-                range: 'user_stats!A:J'
+                range: 'user_stats!A:J'  // Back to A:J for 10 columns
             });
 
             const rows = response.data.values || [];
@@ -200,12 +204,12 @@ class GoogleSheetsDB {
                         totalLogins: parseInt(row[1]) || 0,
                         totalPapersGenerated: parseInt(row[2]) || 0,
                         totalDownloads: parseInt(row[3]) || 0,
-                        subjects: this.parseJSON(row[4]) || {},
-                        classes: this.parseJSON(row[5]) || {},
-                        questionTypes: this.parseJSON(row[6]) || {},
-                        tokensUsed: parseInt(row[7]) || 0,
-                        firstActivity: row[8] || new Date().toISOString(),
-                        lastActivity: row[9] || new Date().toISOString()
+                        classes: this.parseJSON(row[4]) || {},           // E: Classes_Used
+                        subjects: this.parseJSON(row[5]) || {},          // F: Subjects_Used
+                        questionTypes: this.parseJSON(row[6]) || {},     // G: Question_Types_Used
+                        tokensUsed: parseInt(row[7]) || 0,               // H: Tokens_Used
+                        firstActivity: row[8] || new Date().toISOString(), // I: First_Activity
+                        lastActivity: row[9] || new Date().toISOString()   // J: Last_Activity
                     };
                 }
             }
