@@ -23,37 +23,30 @@ class GoogleSheetsDB {
             console.log(`Initializing Google Sheets for ${isProduction ? 'PRODUCTION' : 'STAGING'} environment`);
             console.log(`Using Sheet ID: ${this.sheetId?.substring(0, 10)}...`);
 
-            // Alternative: Use complete JSON key approach
+            // Simplified JSON key approach - no base64 encoding
             let auth;
             try {
                 if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-                    // Use complete JSON key
-                    const serviceAccount = JSON.parse(
-                        Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_JSON, 'base64').toString()
-                    );
+                    // Parse JSON directly (no base64 decoding)
+                    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
                     auth = new google.auth.JWT(
                         serviceAccount.client_email,
                         null,
                         serviceAccount.private_key,
                         ['https://www.googleapis.com/auth/spreadsheets']
                     );
-                    console.log('Using JSON service account authentication');
-                } else {
+                    console.log('Using direct JSON service account authentication');
+                } else if (process.env.GOOGLE_SHEETS_EMAIL && process.env.GOOGLE_SHEETS_PRIVATE_KEY) {
                     // Fallback to individual fields
-                    let privateKey;
-                    try {
-                        privateKey = Buffer.from(process.env.GOOGLE_SHEETS_PRIVATE_KEY_BASE64 || '', 'base64').toString();
-                    } catch (e) {
-                        privateKey = process.env.GOOGLE_SHEETS_PRIVATE_KEY?.replace(/\\n/g, '\n');
-                    }
-
                     auth = new google.auth.JWT(
                         process.env.GOOGLE_SHEETS_EMAIL,
                         null,
-                        privateKey,
+                        process.env.GOOGLE_SHEETS_PRIVATE_KEY.replace(/\\n/g, '\n'),
                         ['https://www.googleapis.com/auth/spreadsheets']
                     );
                     console.log('Using individual field authentication');
+                } else {
+                    throw new Error('No Google Sheets credentials found');
                 }
             } catch (error) {
                 console.error('Authentication setup error:', error.message);
