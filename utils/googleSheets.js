@@ -23,11 +23,20 @@ class GoogleSheetsDB {
             console.log(`Initializing Google Sheets for ${isProduction ? 'PRODUCTION' : 'STAGING'} environment`);
             console.log(`Using Sheet ID: ${this.sheetId?.substring(0, 10)}...`);
 
-            // Create JWT auth
+            // Decode base64 private key and create JWT auth
+            let privateKey;
+            try {
+                // Try to decode base64 first
+                privateKey = Buffer.from(process.env.GOOGLE_SHEETS_PRIVATE_KEY_BASE64 || '', 'base64').toString();
+            } catch (e) {
+                // Fallback to direct key if base64 fails
+                privateKey = process.env.GOOGLE_SHEETS_PRIVATE_KEY?.replace(/\\n/g, '\n');
+            }
+
             const auth = new google.auth.JWT(
                 process.env.GOOGLE_SHEETS_EMAIL,
                 null,
-                process.env.GOOGLE_SHEETS_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+                privateKey,
                 ['https://www.googleapis.com/auth/spreadsheets']
             );
 
