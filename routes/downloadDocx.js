@@ -460,7 +460,7 @@ router.post('/', async (req, res) => {
                 children: docChildren
             }]
         });
-
+        
         const buffer = await Packer.toBuffer(doc);
         const safeSubject = subject.replace(/[^a-z0-9]/gi, '_').toLowerCase();
         const safeClassName = metadata.className?.replace(/\s+/g, '_') || 'unknown_class';
@@ -512,12 +512,4 @@ router.post('/', async (req, res) => {
     }
 });
 
-module.exports = router;.status(400).json({ message: "Invalid input: Subject is required." });
-    }
-    if (!metadata || typeof metadata !== 'object') {
-        await logActivity(email, 'Download Failed - Missing Metadata', {
-            reason: 'Metadata is required',
-            providedMetadata: metadata,
-            requestTime: new Date().toISOString()
-        });
-        return res
+module.exports = router;
