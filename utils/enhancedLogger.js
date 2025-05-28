@@ -113,23 +113,29 @@ class EnhancedLogger {
             userStats.lastActivity = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
             // Track specific actions with enhanced details
+            console.log(`Tracking action: "${action}" for user: ${email}`); // Debug log
+            
             switch(true) {
                 case action.includes('Login Success'):
                     userStats.totalLogins++;
+                    console.log(`Login tracked for ${email}, total: ${userStats.totalLogins}`);
                     break;
 
                 case action.includes('Generated Questions'):
                     userStats.totalPapersGenerated++;
+                    console.log(`Paper generated for ${email}, total: ${userStats.totalPapersGenerated}`);
                     
                     // Track subject
                     if (details.subject) {
                         userStats.subjects[details.subject] = (userStats.subjects[details.subject] || 0) + 1;
+                        console.log(`Subject tracked: ${details.subject}`);
                     }
                     
                     // Track class
                     if (details.class || details.className) {
                         const className = details.class || details.className;
                         userStats.classes[className] = (userStats.classes[className] || 0) + 1;
+                        console.log(`Class tracked: ${className}`);
                     }
 
                     // Track curriculum/board
@@ -139,9 +145,11 @@ class EnhancedLogger {
 
                     // Track question types with detailed breakdown
                     if (details.questionDetails && Array.isArray(details.questionDetails)) {
+                        console.log(`Question details:`, details.questionDetails);
                         details.questionDetails.forEach(qDetail => {
                             if (qDetail.type) {
                                 userStats.questionTypes[qDetail.type] = (userStats.questionTypes[qDetail.type] || 0) + (qDetail.num || 1);
+                                console.log(`Question type tracked: ${qDetail.type}(${qDetail.num})`);
                             }
                         });
                     }
@@ -173,6 +181,11 @@ class EnhancedLogger {
 
                 case action.includes('Download Success'):
                     userStats.totalDownloads++;
+                    console.log(`Download tracked for ${email}, total: ${userStats.totalDownloads}`);
+                    break;
+                    
+                default:
+                    console.log(`No specific tracking for action: ${action}`);
                     break;
             }
 
