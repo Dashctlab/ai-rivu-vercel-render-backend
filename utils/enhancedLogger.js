@@ -97,8 +97,8 @@ class EnhancedLogger {
                     totalLogins: 0,
                     totalPapersGenerated: 0,
                     totalDownloads: 0,
-                    firstActivity: new Date().toISOString(),
-                    lastActivity: new Date().toISOString(),
+                    firstActivity: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+                    lastActivity: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
                     subjects: {},
                     classes: {},
                     boards: {},
@@ -110,7 +110,7 @@ class EnhancedLogger {
                 };
             }
 
-            userStats.lastActivity = new Date().toISOString();
+            userStats.lastActivity = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
             // Track specific actions with enhanced details
             switch(true) {
