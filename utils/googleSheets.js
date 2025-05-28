@@ -84,7 +84,15 @@ class GoogleSheetsDB {
         try {
             await this.ensureInitialized();
 
-            const timestamp = new Date().toISOString();
+            const timestamp = new Date().toLocaleString('en-IN', { 
+                timeZone: 'Asia/Kolkata',
+                year: 'numeric',
+                month: '2-digit', 
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
             const subject = details.subject || '';
             const className = details.class || details.className || '';
             const questionTypes = details.questionDetails ? 
@@ -153,8 +161,8 @@ class GoogleSheetsDB {
                 JSON.stringify(stats.subjects || {}),           // F: Subjects_Used
                 JSON.stringify(stats.questionTypes || {}),      // G: Question_Types_Used
                 stats.tokensUsed || 0,                          // H: Tokens_Used
-                stats.firstActivity || new Date().toISOString(), // I: First_Activity
-                stats.lastActivity || new Date().toISOString()   // J: Last_Activity
+                stats.firstActivity || new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }), // I: First_Activity
+                stats.lastActivity || new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })   // J: Last_Activity
             ]];
 
             if (userRowIndex > 0) {
@@ -208,8 +216,8 @@ class GoogleSheetsDB {
                         subjects: this.parseJSON(row[5]) || {},          // F: Subjects_Used
                         questionTypes: this.parseJSON(row[6]) || {},     // G: Question_Types_Used
                         tokensUsed: parseInt(row[7]) || 0,               // H: Tokens_Used
-                        firstActivity: row[8] || new Date().toISOString(), // I: First_Activity
-                        lastActivity: row[9] || new Date().toISOString()   // J: Last_Activity
+                        firstActivity: row[8] || new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }), // I: First_Activity
+                        lastActivity: row[9] || new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })   // J: Last_Activity
                     };
                 }
             }

@@ -97,8 +97,8 @@ class EnhancedLogger {
                     totalLogins: 0,
                     totalPapersGenerated: 0,
                     totalDownloads: 0,
-                    firstActivity: new Date().toISOString(),
-                    lastActivity: new Date().toISOString(),
+                    firstActivity: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+                    lastActivity: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
                     subjects: {},
                     classes: {},
                     boards: {},
@@ -110,71 +110,72 @@ class EnhancedLogger {
                 };
             }
 
-            userStats.lastActivity = new Date().toISOString();
+            userStats.lastActivity = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
             // Track specific actions with enhanced details
+            console.log(`DEBUG: Tracking action: "${action}" for user: ${email}`); // Debug log
+            console.log(`DEBUG: Action details:`, details); // Debug details
+            
             switch(true) {
                 case action.includes('Login Success'):
                     userStats.totalLogins++;
+                    console.log(`DEBUG: Login tracked for ${email}, total: ${userStats.totalLogins}`);
                     break;
 
-                case action.includes('Generated Questions'):
+                case action.includes('Generated Questions') || action.includes('Generate Success'):
                     userStats.totalPapersGenerated++;
+                    console.log(`DEBUG: Paper generated for ${email}, total: ${userStats.totalPapersGenerated}`);
                     
                     // Track subject
                     if (details.subject) {
                         userStats.subjects[details.subject] = (userStats.subjects[details.subject] || 0) + 1;
+                        console.log(`DEBUG: Subject tracked: ${details.subject}`);
                     }
                     
                     // Track class
                     if (details.class || details.className) {
                         const className = details.class || details.className;
                         userStats.classes[className] = (userStats.classes[className] || 0) + 1;
+                        console.log(`DEBUG: Class tracked: ${className}`);
                     }
 
                     // Track curriculum/board
                     if (details.curriculum) {
                         userStats.boards[details.curriculum] = (userStats.boards[details.curriculum] || 0) + 1;
+                        console.log(`DEBUG: Curriculum tracked: ${details.curriculum}`);
                     }
 
                     // Track question types with detailed breakdown
                     if (details.questionDetails && Array.isArray(details.questionDetails)) {
+                        console.log(`DEBUG: Question details found:`, details.questionDetails);
                         details.questionDetails.forEach(qDetail => {
-                            if (qDetail.type) {
-                                userStats.questionTypes[qDetail.type] = (userStats.questionTypes[qDetail.type] || 0) + (qDetail.num || 1);
+                            if (qDetail.type && qDetail.num) {
+                                userStats.questionTypes[qDetail.type] = (userStats.questionTypes[qDetail.type] || 0) + parseInt(qDetail.num);
+                                console.log(`DEBUG: Question type tracked: ${qDetail.type}(${qDetail.num})`);
                             }
                         });
-                    }
-
-                    // Track difficulty preferences
-                    if (details.difficultySplit) {
-                        userStats.difficulties[details.difficultySplit] = (userStats.difficulties[details.difficultySplit] || 0) + 1;
-                    }
-
-                    // Track time durations
-                    if (details.timeDuration) {
-                        const duration = `${details.timeDuration} min`;
-                        userStats.timeDurations[duration] = (userStats.timeDurations[duration] || 0) + 1;
-                    }
-
-                    // Update average questions per paper
-                    if (details.questionDetails) {
-                        const totalQuestions = details.questionDetails.reduce((sum, q) => sum + (q.num || 0), 0);
-                        const currentAvg = userStats.avgQuestionsPerPaper || 0;
-                        const paperCount = userStats.totalPapersGenerated;
-                        userStats.avgQuestionsPerPaper = Math.round(((currentAvg * (paperCount - 1)) + totalQuestions) / paperCount);
+                    } else {
+                        console.log(`DEBUG: No question details found in:`, details);
                     }
 
                     // Track tokens
                     if (details.tokens) {
                         userStats.tokensUsed += details.tokens;
+                        console.log(`DEBUG: Tokens tracked: ${details.tokens}`);
                     }
                     break;
 
                 case action.includes('Download Success'):
                     userStats.totalDownloads++;
+                    console.log(`DEBUG: Download tracked for ${email}, total: ${userStats.totalDownloads}`);
+                    break;
+                    
+                default:
+                    console.log(`DEBUG: No specific tracking for action: "${action}"`);
                     break;
             }
+            
+            console.log(`DEBUG: Final user stats for ${email}:`, JSON.stringify(userStats, null, 2));
 
             // Update both Google Sheets and local JSON
             await googleSheetsDB.updateUserStats(email, userStats);
