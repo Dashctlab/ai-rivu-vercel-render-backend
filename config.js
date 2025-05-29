@@ -11,9 +11,12 @@ module.exports = {
     maxTokens: parseInt(process.env.AI_MAX_TOKENS) || 4000,
     temperature: parseFloat(process.env.AI_TEMPERATURE) || 0.6,
     
-    // CORRECTED: Valid OpenRouter model IDs
+    // OpenRouter model IDs
     presets: {
-      // Claude models (valid IDs)
+      // Claude models
+      "claude-4-opus": "anthropic/claude-opus-4-20250514",
+      "claude-4-sonnet": "anthropic/claude-sonnet-4-20250514",
+      
       "claude-3.5-sonnet": "anthropic/claude-3.5-sonnet-20241022",
       "claude-3.5-haiku": "anthropic/claude-3.5-haiku-20241022",
       
@@ -32,6 +35,8 @@ module.exports = {
     
     // Updated pricing for valid models
     pricing: {
+      "anthropic/claude-opus-4-20250514": { input: 15, output: 75 },
+      "anthropic/claude-sonnet-4-20250514": { input: 3, output: 15 }, 
       "anthropic/claude-3.5-sonnet-20241022": { input: 3, output: 15 },
       "anthropic/claude-3.5-haiku-20241022": { input: 0.8, output: 4 },
       "openai/gpt-4o": { input: 2.5, output: 10 },
