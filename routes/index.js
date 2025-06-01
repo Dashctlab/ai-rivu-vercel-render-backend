@@ -1,6 +1,4 @@
 // routes/index.js
-// Central router entry point to aggregate and mount individual route handlers
-
 const express = require('express');
 const router = express.Router();
 
@@ -13,12 +11,14 @@ router.get('/', (req, res) => {
 const loginRoute = require('./login');
 const generateRoute = require('./generate');
 const downloadDocxRoute = require('./downloadDocx');
-const adminRoute = require('./admin'); // NEW: Admin dashboard
+const adminRoute = require('./admin');
+const curriculumRoute = require('./curriculum'); // NEW LINE
 
 // Bind them to their respective paths
 router.use('/login', loginRoute);
 router.use('/generate', generateRoute);
 router.use('/download-docx', downloadDocxRoute);
-router.use('/admin', adminRoute); // NEW: Mount admin routes
+router.use('/admin', adminRoute);
+router.use('/api/curriculum', curriculumRoute); // NEW LINE
 
 module.exports = router;
