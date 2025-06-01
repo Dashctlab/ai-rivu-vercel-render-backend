@@ -1,0 +1,42 @@
+{
+  "CBSE": {
+    "Class 1": ["English", "Mathematics", "Environmental Studies", "General Knowledge"],
+    "Class 2": ["English", "Mathematics", "Environmental Studies", "General Knowledge"],
+    "Class 3": ["English", "Mathematics", "Environmental Studies", "Computer Science", "General Knowledge"],
+    "Class 4": ["English", "Mathematics", "Environmental Studies", "Computer Science", "General Knowledge"],
+    "Class 5": ["English", "Mathematics", "Environmental Studies", "Computer Science", "General Knowledge"],
+    "Class 6": ["English", "Mathematics", "Science", "Social Science", "Computer Science", "Sanskrit"],
+    "Class 7": ["English", "Mathematics", "Science", "Social Science", "Computer Science", "Sanskrit"],
+    "Class 8": ["English", "Mathematics", "Science", "Social Science", "Computer Science", "Sanskrit"],
+    "Class 9": ["English", "Mathematics", "Science", "Social Science", "Computer Science", "Information Technology", "Sanskrit"],
+    "Class 10": ["English", "Mathematics", "Science", "Social Science", "Computer Science", "Information Technology", "Sanskrit"],
+    "Class 11": ["English", "Mathematics", "Physics", "Chemistry", "Biology", "Computer Science", "Economics", "Business Studies", "Accountancy", "Political Science", "History", "Geography", "Psychology"],
+    "Class 12": ["English", "Mathematics", "Physics", "Chemistry", "Biology", "Computer Science", "Economics", "Business Studies", "Accountancy", "Political Science", "History", "Geography", "Psychology"]
+  },
+  "Karnataka State Board": {
+    "Class 1": ["English", "Kannada", "Mathematics", "Environmental Studies", "General Knowledge"],
+    "Class 2": ["English", "Kannada", "Mathematics", "Environmental Studies", "General Knowledge"],
+    "Class 3": ["English", "Kannada", "Mathematics", "Environmental Studies", "General Knowledge"],
+    "Class 4": ["English", "Kannada", "Mathematics", "Environmental Studies", "General Knowledge"],
+    "Class 5": ["English", "Kannada", "Mathematics", "Science", "Social Science", "Computer Science"],
+    "Class 6": ["English", "Kannada", "Mathematics", "Science", "Social Science", "Computer Science", "Sanskrit"],
+    "Class 7": ["English", "Kannada", "Mathematics", "Science", "Social Science", "Computer Science", "Sanskrit"],
+    "Class 8": ["English", "Kannada", "Mathematics", "Science", "Social Science", "Computer Science", "Sanskrit"],
+    "Class 9": ["English", "Kannada", "Mathematics", "Science", "Social Science", "Computer Science", "Sanskrit"],
+    "Class 10": ["English", "Kannada", "Mathematics", "Science", "Social Science", "Computer Science", "Sanskrit"]
+  },
+  "Tamil Nadu State Board": {
+    "Class 1": ["Tamil", "English", "Mathematics", "Environmental Studies", "General Knowledge"],
+    "Class 2": ["Tamil", "English", "Mathematics", "Environmental Studies", "General Knowledge"],
+    "Class 3": ["Tamil", "English", "Mathematics", "Environmental Studies", "General Knowledge"],
+    "Class 4": ["Tamil", "English", "Mathematics", "Environmental Studies", "General Knowledge"],
+    "Class 5": ["Tamil", "English", "Mathematics", "Environmental Studies", "General Knowledge"],
+    "Class 6": ["Tamil", "English", "Mathematics", "Science", "Social Science", "Computer Science"],
+    "Class 7": ["Tamil", "English", "Mathematics", "Science", "Social Science", "Computer Science"],
+    "Class 8": ["Tamil", "English", "Mathematics", "Science", "Social Science", "Computer Science"],
+    "Class 9": ["Tamil", "English", "Mathematics", "Science", "Social Science", "Computer Science"],
+    "Class 10": ["Tamil", "English", "Mathematics", "Science", "Social Science", "Computer Science"],
+    "Class 11": ["Tamil", "English", "Physics", "Chemistry", "Mathematics", "Biology", "Computer Science", "Commerce", "Accountancy", "Economics", "History", "Geography", "Political Science"],
+    "Class 12": ["Tamil", "English", "Physics", "Chemistry", "Mathematics", "Biology", "Computer Science", "Commerce", "Accountancy", "Economics", "History", "Geography", "Political Science"]
+  }
+}
