@@ -1,4 +1,4 @@
-// routes/generate.js - Complete file with enhanced prompt builder integration
+// routes/generate.js - Complete file with device tracking and query ID integration
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
@@ -6,7 +6,9 @@ const axios = require('axios');
 const { getUsers, saveUsers } = require('../utils/fileUtils');
 const logActivity = require('../utils/enhancedLogger');
 const config = require('../config');
-const EnhancedPromptBuilder = require('../utils/enhancedPromptBuilder'); // 🆕 NEW
+const EnhancedPromptBuilder = require('../utils/enhancedPromptBuilder');
+const { generateQueryId } = require('../utils/queryIdGenerator');
+const { detectDevice } = require('../utils/deviceDetection');
 
 // Headers required by OpenRouter
 const openRouterHeaders = {
@@ -143,12 +145,51 @@ router.get('/current-model', (req, res) => {
 });
 
 /**
- * 🆕 UPDATED: Main generation route using enhanced prompt builder
+ * Helper function to validate if response is a proper question paper
+ */
+function isValidQuestionPaper(content) {
+    if (!content || content.length < 200) return false;
+    
+    // Check for conversational indicators
+    const conversationalPhrases = [
+        'i need more information',
+        'could you clarify',
+        'i would need',
+    ];
+    
+    const lowerContent = content.toLowerCase();
+    const hasConversational = conversationalPhrases.some(phrase => lowerContent.includes(phrase));
+    
+    // Check for question paper indicators
+    const questionPaperIndicators = [
+        'section',
+        'question',
+        'marks',
+        'answer',
+        'time',
+        'instructions'
+    ];
+    
+    const hasQuestionPaper = questionPaperIndicators.filter(indicator => 
+        lowerContent.includes(indicator)
+    ).length >= 3;
+    
+    return !hasConversational && hasQuestionPaper;
+}
+
+/**
+ * Main generation route with enhanced tracking and error handling
  */
 router.post('/', async (req, res) => {
+    // Generate unique query ID for this request
+    const queryId = generateQueryId();
+    
+    // Detect device information
+    const deviceInfo = detectDevice(req);
+    
     const {
         curriculum, className, subject, topic,
-        testObjective, focusLevel,  // 🆕 NEW FIELDS
+        testObjective, focusLevel,
         difficultySplit, timeDuration, additionalConditions,
         questionDetails, answerKeyFormat
     } = req.body;
@@ -158,30 +199,37 @@ router.post('/', async (req, res) => {
     // Validation
     if (!curriculum || !className || !subject || !Array.isArray(questionDetails) || questionDetails.length === 0) {
         await logActivity(email, 'Generate Failed - Missing Parameters', {
+            queryId,
             missingFields: {
                 curriculum: !curriculum,
                 className: !className,
                 subject: !subject,
                 questionDetails: !Array.isArray(questionDetails) || questionDetails.length === 0
             },
-            providedData: { curriculum, className, subject, questionDetailsCount: questionDetails?.length || 0 }
+            providedData: { curriculum, className, subject, questionDetailsCount: questionDetails?.length || 0 },
+            ...deviceInfo
         });
-        return res.status(400).json({ message: 'Missing required generation parameters.' });
+        return res.status(400).json({ 
+            message: 'Please fill in all required fields: curriculum board, class, subject, and question types.',
+            queryId: queryId
+        });
     }
 
     try {
         // Enhanced logging for generation start
         await logActivity(email, 'Generate Started', {
+            queryId,
             curriculum, className, subject, topic, 
             testObjective: testObjective || 'mixed', 
             focusLevel: focusLevel || 'comprehensive',
             difficultySplit, timeDuration,
             questionDetailsCount: questionDetails.length,
             startTime: new Date().toISOString(),
-            modelConfigured: config.AI_MODEL_CONFIG.primary
+            modelConfigured: config.AI_MODEL_CONFIG.primary,
+            ...deviceInfo
         });
 
-        // 🆕 NEW: Use Enhanced Prompt Builder instead of basic prompt
+        // Use Enhanced Prompt Builder
         const promptBuilder = new EnhancedPromptBuilder();
         let enhancedPrompt;
         let pedagogicalSummary = '';
@@ -217,9 +265,11 @@ router.post('/', async (req, res) => {
             enhancedPromptUsed = false;
             
             await logActivity(email, 'Enhanced Prompt Failed - Using Fallback', {
+                queryId,
                 error: promptError.message,
                 curriculum, className, subject,
-                fallbackUsed: true
+                fallbackUsed: true,
+                ...deviceInfo
             });
         }
 
@@ -236,14 +286,48 @@ router.post('/', async (req, res) => {
         console.log(`🤖 Using AI Model: ${activeModel.name} ${activeModel.preset ? `(preset: ${activeModel.preset})` : ''}`);
 
         const startTime = Date.now();
-        const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', requestData, {
+        let response = await axios.post('https://openrouter.ai/api/v1/chat/completions', requestData, {
             headers: openRouterHeaders,
-            timeout: 120000 // 2 minute timeout for complex generations
+            timeout: 120000
         });
         const endTime = Date.now();
 
-        const content = response.data?.choices?.[0]?.message?.content;
-        if (!content) throw new Error("Invalid OpenRouter response - no content returned.");
+        let content = response.data?.choices?.[0]?.message?.content;
+        
+        // Check if AI response is conversational instead of direct question paper
+        if (content && !isValidQuestionPaper(content)) {
+            console.log('AI gave conversational response, retrying with stronger prompt...');
+            
+            // Retry with stronger prompt
+            const retryPrompt = enhancedPrompt + '\n\nIMPORTANT: Generate the question paper directly now. Do not ask questions or request clarification. Provide the complete question paper and answer key immediately.';
+            
+            const retryRequestData = {
+                ...requestData,
+                messages: [{ role: "user", content: retryPrompt }]
+            };
+            
+            try {
+                const retryResponse = await axios.post('https://openrouter.ai/api/v1/chat/completions', retryRequestData, {
+                    headers: openRouterHeaders,
+                    timeout: 120000
+                });
+                
+                const retryContent = retryResponse.data?.choices?.[0]?.message?.content;
+                
+                if (retryContent && isValidQuestionPaper(retryContent)) {
+                    console.log('Retry successful, using retried response');
+                    response.data = retryResponse.data;
+                    content = retryContent;
+                } else {
+                    throw new Error("AI is asking for clarification instead of generating the question paper. Please try again with more specific requirements.");
+                }
+            } catch (retryError) {
+                console.error('Retry failed:', retryError.message);
+                throw new Error("Unable to generate question paper. Please provide more specific details about your requirements and try again.");
+            }
+        }
+
+        if (!content) throw new Error("Unable to generate question paper. Please try again.");
 
         const users = getUsers();
         const usage = response.data.usage || { total_tokens: 0 };
@@ -260,6 +344,7 @@ router.post('/', async (req, res) => {
 
         // Enhanced success logging
         await logActivity(email, 'Generated Questions - Subject: ' + subject + ', Class: ' + className + ', Tokens: ' + usage.total_tokens, {
+            queryId,
             subject, class: className, curriculum, topic, 
             testObjective: testObjective || 'mixed', 
             focusLevel: focusLevel || 'comprehensive',
@@ -274,25 +359,29 @@ router.post('/', async (req, res) => {
             modelPreset: activeModel.preset,
             costEstimate: costEstimate,
             enhancedPromptUsed: enhancedPromptUsed,
-            successful: true
+            successful: true,
+            ...deviceInfo
         });
 
-        // Send response with enhanced metadata
+        // Send response with enhanced metadata including query ID
         res.json({ 
             questions: content,
-            pedagogicalSummary: pedagogicalSummary, // 🆕 NEW
+            queryId: queryId,
+            pedagogicalSummary: pedagogicalSummary,
             metadata: {
+                queryId: queryId,
                 modelUsed: activeModel.name,
                 modelPreset: activeModel.preset,
                 tokensUsed: usage.total_tokens,
                 costEstimate: costEstimate,
                 responseTime: endTime - startTime,
-                enhancedPromptUsed: enhancedPromptUsed // 🆕 NEW
+                enhancedPromptUsed: enhancedPromptUsed
             }
         });
 
     } catch (error) {
         console.error("Generation Error:", {
+            queryId: queryId,
             status: error.response?.status,
             message: error.response?.data?.error?.message || error.message,
             model: config.AI_MODEL_CONFIG.primary
@@ -300,6 +389,7 @@ router.post('/', async (req, res) => {
 
         const activeModel = getActiveModel();
         await logActivity(email, 'Generate Failed - Error: ' + error.message, {
+            queryId,
             subject, class: className, curriculum, 
             testObjective: testObjective || 'mixed', 
             focusLevel: focusLevel || 'comprehensive',
@@ -309,33 +399,45 @@ router.post('/', async (req, res) => {
             errorTime: new Date().toISOString(),
             modelAttempted: activeModel.name,
             modelPreset: activeModel.preset,
-            requestData: { curriculum, className, subject, questionDetailsCount: questionDetails.length }
+            requestData: { curriculum, className, subject, questionDetailsCount: questionDetails.length },
+            ...deviceInfo
         });
 
-        // Enhanced error responses
+        // Enhanced teacher-friendly error responses
         if (error.response?.status === 401) {
             res.status(500).json({ 
-                message: "Authentication error with AI service. Please contact support.",
-                errorCode: "AUTH_ERROR"
+                message: "Unable to connect to our AI service. Please try again later, if issue persists contact support.",
+                queryId: queryId,
+                errorCode: "CONNECTION_ERROR"
             });
         } else if (error.response?.status === 429) {
             res.status(500).json({ 
-                message: "AI service is busy. Please try again in a few moments.",
-                errorCode: "RATE_LIMIT"
+                message: "Our AI service is currently busy. Please wait a moment and try again.",
+                queryId: queryId,
+                errorCode: "SERVICE_BUSY"
             });
         } else if (error.response?.status === 400) {
             res.status(500).json({ 
-                message: "Invalid request to AI service. Please try again.",
-                errorCode: "BAD_REQUEST"
+                message: "There was an issue with your request. Please check your inputs and try again.",
+                queryId: queryId,
+                errorCode: "INVALID_REQUEST"
             });
         } else if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
             res.status(500).json({
-                message: "Request timed out. Please try again with a simpler request.",
+                message: "The request is taking longer than expected. Please try again in a few moments.",
+                queryId: queryId,
                 errorCode: "TIMEOUT"
+            });
+        } else if (error.message.includes('clarification')) {
+            res.status(500).json({
+                message: "Please provide more specific details about your question paper requirements and try again.",
+                queryId: queryId,
+                errorCode: "NEEDS_MORE_INFO"
             });
         } else {
             res.status(500).json({ 
-                message: "Error generating questions. Please try again.",
+                message: "AI is unable to generate your question paper right now. Please try again in a few moments.",
+                queryId: queryId,
                 errorCode: "GENERATION_ERROR"
             });
         }
@@ -343,7 +445,7 @@ router.post('/', async (req, res) => {
 });
 
 /**
- * 🆕 NEW: Fallback basic prompt builder (in case enhanced fails)
+ * Fallback basic prompt builder (in case enhanced fails)
  */
 function buildBasicPrompt(curriculum, className, subject, topic, questionDetails, difficultySplit, timeDuration, additionalConditions, answerKeyFormat) {
     let prompt = `You are an expert school examination paper setter. Create a formal question paper with the following exact specifications:\n\n`;
