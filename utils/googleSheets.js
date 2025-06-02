@@ -80,53 +80,58 @@ class GoogleSheetsDB {
     /**
      * Log user activity to Activity_Logs sheet
      */
-    async logActivity(email, action, details = {}) {
-        try {
-            await this.ensureInitialized();
+async logActivity(email, action, details = {}) {
+    try {
+        await this.ensureInitialized();
 
-            const timestamp = new Date().toLocaleString('en-IN', { 
-                timeZone: 'Asia/Kolkata',
-                year: 'numeric',
-                month: '2-digit', 
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            });
-            const subject = details.subject || '';
-            const className = details.class || details.className || '';
-            const questionTypes = details.questionDetails ? 
-                details.questionDetails.map(q => `${q.type}(${q.num})`).join(', ') : '';
-            const additionalInstructions = details.additionalConditions || '';
-            const tokensUsed = details.tokens || 0;
-            const detailsJSON = JSON.stringify(details);
+        const timestamp = new Date().toLocaleString('en-IN', { 
+            timeZone: 'Asia/Kolkata',
+            year: 'numeric',
+            month: '2-digit', 
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
 
-            const values = [[
-                timestamp,
-                email,
-                action,
-                subject,
-                className,
-                questionTypes,
-                additionalInstructions,
-                tokensUsed,
-                detailsJSON
-            ]];
+        const values = [[
+            timestamp,                                      // A: Timestamp
+            details.queryId || 'N/A',                      // B: Identifier
+            email,                                          // C: User_Email
+            action,                                         // D: Action
+            details.subject || '',                          // E: Subject
+            details.class || details.className || '',      // F: Class
+            details.questionDetails ? 
+                details.questionDetails.map(q => `${q.type}(${q.num})`).join(', ') : '', // G: Question_Types
+            details.assessment || details.focusLevel || '', // H: Assessment
+            details.testObjective || '',                    // I: What_are_you_testing
+            details.difficultySplit || '',                  // J: Difficulty
+            details.additionalConditions || '',            // K: Additional_Instructions
+            details.answerKeyFormat || 'Brief',            // L: Answer_key
+            details.tokens || 0,                           // M: Tokens_Used
+            details.deviceType || 'Unknown',               // N: Device_Type
+            details.screenSize || 'Unknown',               // O: Screen_Size
+            details.browser || 'Unknown',                  // P: Browser
+            details.operatingSystem || 'Unknown',          // Q: Operating_System
+            details.qualityFeedback?.outputQuality || '',  // R: Quality_Score_Output
+            details.qualityFeedback?.questionQuality || '', // S: Quality_Score_Questions
+            details.qualityFeedback?.curriculumAlignment || '', // T: Quality_Score_Curriculum
+            JSON.stringify(details)                         // U: Details_JSON
+        ]];
 
-            await this.sheets.spreadsheets.values.append({
-                spreadsheetId: this.sheetId,
-                range: 'activity_logs!A:I',
-                valueInputOption: 'RAW',
-                resource: { values }
-            });
+        await this.sheets.spreadsheets.values.append({
+            spreadsheetId: this.sheetId,
+            range: 'activity_logs!A:U',
+            valueInputOption: 'RAW',
+            resource: { values }
+        });
 
-            console.log(`Activity logged to Google Sheets: ${email} - ${action}`);
-        } catch (error) {
-            console.error('Error logging to Google Sheets:', error.message);
-            // Don't throw error - fallback to console logging
-            console.log(`Fallback log: ${email} - ${action}`, details);
-        }
+        console.log(`Activity logged to Google Sheets: ${email} - ${action}`);
+    } catch (error) {
+        console.error('Error logging to Google Sheets:', error.message);
+        console.log(`Fallback log: ${email} - ${action}`, details);
     }
+}
 
     /**
      * Update or insert user statistics
