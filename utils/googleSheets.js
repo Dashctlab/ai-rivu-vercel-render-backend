@@ -10,63 +10,75 @@ class GoogleSheetsDB {
         this.initializeAuth();
     }
 
-    async initializeAuth() {
-        try {
-            // Environment detection
-            const isProduction = process.env.NODE_ENV === 'production' || 
-                               process.env.RENDER_SERVICE_NAME?.includes('prod');
-            
-            this.sheetId = isProduction ? 
-                process.env.PROD_SHEET_ID : 
-                process.env.STAGING_SHEET_ID;
+async initializeAuth() {
+  try {
+    // Improved environment detection
+    const isProduction = process.env.NODE_ENV === 'production' || 
+                       (process.env.RENDER_SERVICE_NAME && process.env.RENDER_SERVICE_NAME.includes('prod')) ||
+                       process.env.VERCEL_ENV === 'production';
+    
+    this.sheetId = isProduction ? 
+      process.env.PROD_SHEET_ID : 
+      process.env.STAGING_SHEET_ID;
 
-            console.log(`Initializing Google Sheets for ${isProduction ? 'PRODUCTION' : 'STAGING'} environment`);
-            console.log(`Using Sheet ID: ${this.sheetId}`);
-            
-            if (!this.sheetId) {
-                throw new Error(`Sheet ID not found. Check ${isProduction ? 'PROD_SHEET_ID' : 'STAGING_SHEET_ID'} environment variable`);
-            }
-
-            // Simplified JSON key approach - no base64 encoding
-            let auth;
-            try {
-                if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-                    // Parse JSON directly (no base64 decoding)
-                    const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-                    auth = new google.auth.JWT(
-                        serviceAccount.client_email,
-                        null,
-                        serviceAccount.private_key,
-                        ['https://www.googleapis.com/auth/spreadsheets']
-                    );
-                    console.log('Using direct JSON service account authentication');
-                } else if (process.env.GOOGLE_SHEETS_EMAIL && process.env.GOOGLE_SHEETS_PRIVATE_KEY) {
-                    // Fallback to individual fields
-                    auth = new google.auth.JWT(
-                        process.env.GOOGLE_SHEETS_EMAIL,
-                        null,
-                        process.env.GOOGLE_SHEETS_PRIVATE_KEY.replace(/\\n/g, '\n'),
-                        ['https://www.googleapis.com/auth/spreadsheets']
-                    );
-                    console.log('Using individual field authentication');
-                } else {
-                    throw new Error('No Google Sheets credentials found');
-                }
-            } catch (error) {
-                console.error('Authentication setup error:', error.message);
-                throw error;
-            }
-
-            // Initialize sheets API
-            this.sheets = google.sheets({ version: 'v4', auth });
-            this.isInitialized = true;
-            
-            console.log('Google Sheets authentication successful');
-        } catch (error) {
-            console.error('Google Sheets initialization error:', error.message);
-            this.isInitialized = false;
-        }
+    console.log(`Initializing Google Sheets for ${isProduction ? 'PRODUCTION' : 'STAGING'} environment`);
+    
+    if (!this.sheetId) {
+      const requiredVar = isProduction ? 'PROD_SHEET_ID' : 'STAGING_SHEET_ID';
+      throw new Error(`Sheet ID not found. Check ${requiredVar} environment variable`);
     }
+
+    // Enhanced authentication with better error handling
+    let auth;
+    if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+      try {
+        const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+        
+        // Validate required fields
+        if (!serviceAccount.client_email || !serviceAccount.private_key) {
+          throw new Error('Invalid service account JSON: missing required fields');
+        }
+        
+        auth = new google.auth.JWT(
+          serviceAccount.client_email,
+          null,
+          serviceAccount.private_key,
+          ['https://www.googleapis.com/auth/spreadsheets']
+        );
+        console.log('Using direct JSON service account authentication');
+      } catch (parseError) {
+        throw new Error(`Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON: ${parseError.message}`);
+      }
+    } else if (process.env.GOOGLE_SHEETS_EMAIL && process.env.GOOGLE_SHEETS_PRIVATE_KEY) {
+      auth = new google.auth.JWT(
+        process.env.GOOGLE_SHEETS_EMAIL,
+        null,
+        process.env.GOOGLE_SHEETS_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        ['https://www.googleapis.com/auth/spreadsheets']
+      );
+      console.log('Using individual field authentication');
+    } else {
+      throw new Error('No Google Sheets credentials found. Set either GOOGLE_SERVICE_ACCOUNT_JSON or individual credential fields');
+    }
+
+    // Test authentication
+    this.sheets = google.sheets({ version: 'v4', auth });
+    
+    // Verify connection with a test call
+    await this.sheets.spreadsheets.get({
+      spreadsheetId: this.sheetId,
+      fields: 'properties.title'
+    });
+    
+    this.isInitialized = true;
+    console.log('Google Sheets authentication successful');
+    
+  } catch (error) {
+    console.error('Google Sheets initialization error:', error.message);
+    this.isInitialized = false;
+    throw error; // Re-throw for proper error handling
+  }
+}
 
     async ensureInitialized() {
         if (!this.isInitialized) {
