@@ -80,115 +80,132 @@ class GoogleSheetsDB {
     /**
      * Log user activity to Activity_Logs sheet
      */
-    async logActivity(email, action, details = {}) {
-        try {
-            await this.ensureInitialized();
+async logActivity(email, action, details = {}) {
+    try {
+        await this.ensureInitialized();
 
-            const timestamp = new Date().toLocaleString('en-IN', { 
-                timeZone: 'Asia/Kolkata',
-                year: 'numeric',
-                month: '2-digit', 
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            });
-            const subject = details.subject || '';
-            const className = details.class || details.className || '';
-            const questionTypes = details.questionDetails ? 
-                details.questionDetails.map(q => `${q.type}(${q.num})`).join(', ') : '';
-            const additionalInstructions = details.additionalConditions || '';
-            const tokensUsed = details.tokens || 0;
-            const detailsJSON = JSON.stringify(details);
+        const timestamp = new Date().toLocaleString('en-IN', { 
+            timeZone: 'Asia/Kolkata',
+            year: 'numeric',
+            month: '2-digit', 
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
 
-            const values = [[
-                timestamp,
-                email,
-                action,
-                subject,
-                className,
-                questionTypes,
-                additionalInstructions,
-                tokensUsed,
-                detailsJSON
-            ]];
+        const values = [[
+            timestamp,                                      // A: Timestamp
+            details.queryId || 'N/A',                      // B: Identifier
+            email,                                          // C: User_Email
+            action,                                         // D: Action
+            details.subject || '',                          // E: Subject
+            details.class || details.className || '',      // F: Class
+            details.questionDetails ? 
+                details.questionDetails.map(q => `${q.type}(${q.num})`).join(', ') : '', // G: Question_Types
+            details.assessment || details.focusLevel || '', // H: Assessment
+            details.testObjective || '',                    // I: What_are_you_testing
+            details.difficultySplit || '',                  // J: Difficulty
+            details.additionalConditions || '',            // K: Additional_Instructions
+            details.answerKeyFormat || 'Brief',            // L: Answer_key
+            details.tokens || 0,                           // M: Tokens_Used
+            details.deviceType || 'Unknown',               // N: Device_Type
+            details.screenSize || 'Unknown',               // O: Screen_Size
+            details.browser || 'Unknown',                  // P: Browser
+            details.operatingSystem || 'Unknown',          // Q: Operating_System
+            details.qualityFeedback?.outputQuality || '',  // R: Quality_Score_Output
+            details.qualityFeedback?.questionQuality || '', // S: Quality_Score_Questions
+            details.qualityFeedback?.curriculumAlignment || '', // T: Quality_Score_Curriculum
+            JSON.stringify(details)                         // U: Details_JSON
+        ]];
 
-            await this.sheets.spreadsheets.values.append({
-                spreadsheetId: this.sheetId,
-                range: 'activity_logs!A:I',
-                valueInputOption: 'RAW',
-                resource: { values }
-            });
+        await this.sheets.spreadsheets.values.append({
+            spreadsheetId: this.sheetId,
+            range: 'activity_logs!A:U',
+            valueInputOption: 'RAW',
+            resource: { values }
+        });
 
-            console.log(`Activity logged to Google Sheets: ${email} - ${action}`);
-        } catch (error) {
-            console.error('Error logging to Google Sheets:', error.message);
-            // Don't throw error - fallback to console logging
-            console.log(`Fallback log: ${email} - ${action}`, details);
-        }
+        console.log(`Activity logged to Google Sheets: ${email} - ${action}`);
+    } catch (error) {
+        console.error('Error logging to Google Sheets:', error.message);
+        console.log(`Fallback log: ${email} - ${action}`, details);
     }
+}
 
     /**
      * Update or insert user statistics
      */
-    async updateUserStats(email, stats) {
-        try {
-            await this.ensureInitialized();
+async updateUserStats(email, stats) {
+    try {
+        await this.ensureInitialized();
 
-            // First, try to find existing user row
-            const response = await this.sheets.spreadsheets.values.get({
-                spreadsheetId: this.sheetId,
-                range: 'user_stats!A:J'  // Back to A:J for 10 columns
-            });
+        const response = await this.sheets.spreadsheets.values.get({
+            spreadsheetId: this.sheetId,
+            range: 'user_stats!A:W'  // Extended to column W for new fields
+        });
 
-            const rows = response.data.values || [];
-            let userRowIndex = -1;
+        const rows = response.data.values || [];
+        let userRowIndex = -1;
 
-            // Find user row (skip header row)
-            for (let i = 1; i < rows.length; i++) {
-                if (rows[i][0] === email) {
-                    userRowIndex = i + 1; // +1 because sheets are 1-indexed
-                    break;
-                }
+        for (let i = 1; i < rows.length; i++) {
+            if (rows[i][0] === email) {
+                userRowIndex = i + 1;
+                break;
             }
-
-            const values = [[
-                email,                                           // A: User_Email
-                stats.totalLogins || 0,                         // B: Total_Logins  
-                stats.totalPapersGenerated || 0,                // C: Papers_Generated
-                stats.totalDownloads || 0,                      // D: Downloads
-                JSON.stringify(stats.classes || {}),            // E: Classes_Used
-                JSON.stringify(stats.subjects || {}),           // F: Subjects_Used
-                JSON.stringify(stats.questionTypes || {}),      // G: Question_Types_Used
-                stats.tokensUsed || 0,                          // H: Tokens_Used
-                stats.firstActivity || new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }), // I: First_Activity
-                stats.lastActivity || new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })   // J: Last_Activity
-            ]];
-
-            if (userRowIndex > 0) {
-                // Update existing user
-                await this.sheets.spreadsheets.values.update({
-                    spreadsheetId: this.sheetId,
-                    range: `user_stats!A${userRowIndex}:J${userRowIndex}`,  // Back to J for 10 columns
-                    valueInputOption: 'RAW',
-                    resource: { values }
-                });
-            } else {
-                // Add new user
-                await this.sheets.spreadsheets.values.append({
-                    spreadsheetId: this.sheetId,
-                    range: 'user_stats!A:J',  // Back to A:J for 10 columns
-                    valueInputOption: 'RAW',
-                    resource: { values }
-                });
-            }
-
-            console.log(`User stats updated in Google Sheets: ${email}`);
-        } catch (error) {
-            console.error('Error updating user stats in Google Sheets:', error.message);
         }
-    }
 
+        const values = [[
+            email,                                           // A: User_Email
+            stats.totalLogins || 0,                         // B: Total_Logins  
+            stats.totalPapersGenerated || 0,                // C: Papers_Generated
+            stats.totalDownloads || 0,                      // D: Downloads
+            JSON.stringify(stats.classes || {}),            // E: Classes_Used
+            JSON.stringify(stats.subjects || {}),           // F: Subjects_Used
+            JSON.stringify(stats.questionTypes || {}),      // G: Question_Types_Used
+            JSON.stringify(stats.assessmentTypes || {}),    // H: Assessment
+            JSON.stringify(stats.testObjectives || {}),     // I: What_are_you_testing
+            JSON.stringify(stats.timeDurations || {}),      // J: Duration
+            JSON.stringify(stats.difficulties || {}),       // K: Difficulty
+            'Brief', // Default answer key format            // L: Answer_key
+            stats.deviceType || 'Unknown',                  // M: Device_Type
+            stats.operatingSystem || 'Unknown',             // N: Operating_System
+            this.formatQualityScore(stats.qualityScoreOutput), // O: Quality_Score_Output
+            this.formatQualityScore(stats.qualityScoreQuestions), // P: Quality_Score_Questions
+            this.formatQualityScore(stats.qualityScoreCurriculum), // Q: Quality_Score_Curriculum
+            stats.tokensUsed || 0,                          // R: Tokens_Used
+            stats.deviceTypeUsagePercentage || 'Unknown: 100%', // S: Device_Type_Usage
+            stats.firstActivity || new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }), // T: First_Activity
+            stats.lastActivity || new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })   // U: Last_Activity
+        ]];
+
+        if (userRowIndex > 0) {
+            await this.sheets.spreadsheets.values.update({
+                spreadsheetId: this.sheetId,
+                range: `user_stats!A${userRowIndex}:U${userRowIndex}`,
+                valueInputOption: 'RAW',
+                resource: { values }
+            });
+        } else {
+            await this.sheets.spreadsheets.values.append({
+                spreadsheetId: this.sheetId,
+                range: 'user_stats!A:U',
+                valueInputOption: 'RAW',
+                resource: { values }
+            });
+        }
+
+        console.log(`User stats updated in Google Sheets: ${email}`);
+    } catch (error) {
+        console.error('Error updating user stats in Google Sheets:', error.message);
+    }
+}
+
+//helper function
+formatQualityScore(scoreObj) {
+    if (!scoreObj || typeof scoreObj !== 'object') return 'Green: 0, Yellow: 0, Red: 0';
+    return `Green: ${scoreObj.Green || 0}, Yellow: ${scoreObj.Yellow || 0}, Red: ${scoreObj.Red || 0}`;
+}
     /**
      * Get all user statistics for admin dashboard
      */
