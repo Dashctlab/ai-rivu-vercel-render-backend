@@ -86,8 +86,6 @@ class EnhancedLogger {
     /**
      * Enhanced user statistics tracking - now syncs with Google Sheets
      */
-  // utils/enhancedLogger.js - Fix around line 140-150
-
 async updateUserStats(email, action, details) {
     try {
         // Get current stats from Google Sheets first
@@ -103,89 +101,121 @@ async updateUserStats(email, action, details) {
                 lastActivity: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
                 subjects: {},
                 classes: {},
-                boards: {},           // ← This was missing!
+                boards: {},
                 questionTypes: {},
                 tokensUsed: 0,
                 difficulties: {},
                 timeDurations: {},
-                avgQuestionsPerPaper: 0
+                avgQuestionsPerPaper: 0,
+                // NEW FIELDS
+                assessmentTypes: {},
+                testObjectives: {},
+                deviceType: 'Unknown',
+                operatingSystem: 'Unknown',
+                qualityScoreOutput: { Green: 0, Yellow: 0, Red: 0 },
+                qualityScoreQuestions: { Green: 0, Yellow: 0, Red: 0 },
+                qualityScoreCurriculum: { Green: 0, Yellow: 0, Red: 0 },
+                deviceTypeUsage: {}
             };
         }
 
-        // FIX: Ensure all nested objects exist
+        // Ensure all nested objects exist
         userStats.subjects = userStats.subjects || {};
         userStats.classes = userStats.classes || {};
-        userStats.boards = userStats.boards || {};           // ← Add this line
+        userStats.boards = userStats.boards || {};
         userStats.questionTypes = userStats.questionTypes || {};
         userStats.difficulties = userStats.difficulties || {};
         userStats.timeDurations = userStats.timeDurations || {};
+        userStats.assessmentTypes = userStats.assessmentTypes || {};
+        userStats.testObjectives = userStats.testObjectives || {};
+        userStats.qualityScoreOutput = userStats.qualityScoreOutput || { Green: 0, Yellow: 0, Red: 0 };
+        userStats.qualityScoreQuestions = userStats.qualityScoreQuestions || { Green: 0, Yellow: 0, Red: 0 };
+        userStats.qualityScoreCurriculum = userStats.qualityScoreCurriculum || { Green: 0, Yellow: 0, Red: 0 };
+        userStats.deviceTypeUsage = userStats.deviceTypeUsage || {};
 
         userStats.lastActivity = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
+        // Track device info
+        if (details.deviceType) {
+            userStats.deviceType = details.deviceType;
+            userStats.deviceTypeUsage[details.deviceType] = (userStats.deviceTypeUsage[details.deviceType] || 0) + 1;
+        }
+        if (details.operatingSystem) {
+            userStats.operatingSystem = details.operatingSystem;
+        }
+
         // Track specific actions with enhanced details
-        console.log(`DEBUG: Tracking action: "${action}" for user: ${email}`);
-        console.log(`DEBUG: Action details:`, details);
-        
         switch(true) {
             case action.includes('Login Success'):
                 userStats.totalLogins++;
-                console.log(`DEBUG: Login tracked for ${email}, total: ${userStats.totalLogins}`);
                 break;
 
             case action.includes('Generated Questions') || action.includes('Generate Success'):
                 userStats.totalPapersGenerated++;
-                console.log(`DEBUG: Paper generated for ${email}, total: ${userStats.totalPapersGenerated}`);
                 
-                // Track subject
                 if (details.subject) {
                     userStats.subjects[details.subject] = (userStats.subjects[details.subject] || 0) + 1;
-                    console.log(`DEBUG: Subject tracked: ${details.subject}`);
                 }
                 
-                // Track class
                 if (details.class || details.className) {
                     const className = details.class || details.className;
                     userStats.classes[className] = (userStats.classes[className] || 0) + 1;
-                    console.log(`DEBUG: Class tracked: ${className}`);
                 }
 
-                // Track curriculum/board - NOW SAFE
                 if (details.curriculum) {
                     userStats.boards[details.curriculum] = (userStats.boards[details.curriculum] || 0) + 1;
-                    console.log(`DEBUG: Curriculum tracked: ${details.curriculum}`);
                 }
 
-                // Track question types with detailed breakdown
+                // Track assessment and test objective
+                if (details.testObjective) {
+                    userStats.testObjectives[details.testObjective] = (userStats.testObjectives[details.testObjective] || 0) + 1;
+                }
+
                 if (details.questionDetails && Array.isArray(details.questionDetails)) {
-                    console.log(`DEBUG: Question details found:`, details.questionDetails);
                     details.questionDetails.forEach(qDetail => {
                         if (qDetail.type && qDetail.num) {
                             userStats.questionTypes[qDetail.type] = (userStats.questionTypes[qDetail.type] || 0) + parseInt(qDetail.num);
-                            console.log(`DEBUG: Question type tracked: ${qDetail.type}(${qDetail.num})`);
                         }
                     });
-                } else {
-                    console.log(`DEBUG: No question details found in:`, details);
                 }
 
-                // Track tokens
                 if (details.tokens) {
                     userStats.tokensUsed += details.tokens;
-                    console.log(`DEBUG: Tokens tracked: ${details.tokens}`);
                 }
                 break;
 
             case action.includes('Download Success'):
                 userStats.totalDownloads++;
-                console.log(`DEBUG: Download tracked for ${email}, total: ${userStats.totalDownloads}`);
                 break;
-                
-            default:
-                console.log(`DEBUG: No specific tracking for action: "${action}"`);
+
+            case action.includes('Quality Feedback'):
+                // Track quality scores
+                if (details.qualityFeedback) {
+                    const feedback = details.qualityFeedback;
+                    if (feedback.outputQuality) {
+                        userStats.qualityScoreOutput[feedback.outputQuality]++;
+                    }
+                    if (feedback.questionQuality) {
+                        userStats.qualityScoreQuestions[feedback.questionQuality]++;
+                    }
+                    if (feedback.curriculumAlignment) {
+                        userStats.qualityScoreCurriculum[feedback.curriculumAlignment]++;
+                    }
+                }
                 break;
         }
-        
-        console.log(`DEBUG: Final user stats for ${email}:`, JSON.stringify(userStats, null, 2));
+
+        // Calculate device usage percentages
+        const totalDeviceUsage = Object.values(userStats.deviceTypeUsage).reduce((sum, count) => sum + count, 0);
+        if (totalDeviceUsage > 0) {
+            const devicePercentages = {};
+            Object.entries(userStats.deviceTypeUsage).forEach(([device, count]) => {
+                devicePercentages[device] = Math.round((count / totalDeviceUsage) * 100);
+            });
+            userStats.deviceTypeUsagePercentage = Object.entries(devicePercentages)
+                .map(([device, percentage]) => `${device}: ${percentage}%`)
+                .join(', ');
+        }
 
         // Update both Google Sheets and local JSON
         await googleSheetsDB.updateUserStats(email, userStats);
