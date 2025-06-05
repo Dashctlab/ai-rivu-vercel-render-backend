@@ -7,6 +7,14 @@ router.get('/', (req, res) => {
     res.status(200).send('AI-RIVU Backend is running.');
 });
 
+// Simple health check endpoint. Using --> uptimerobot.com to do server ping every 5 mins to keep alive
+router.get('/health', (req, res) => {
+    res.status(200).json({ 
+        status: 'healthy', 
+        timestamp: new Date().toISOString() 
+    });
+});
+
 // Import individual routes
 const loginRoute = require('./login');
 const generateRoute = require('./generate');
