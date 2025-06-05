@@ -45,6 +45,7 @@ app.use(generalLimiter);
 // CORS config
 const corsOptions = {
     origin: function (origin, callback) {
+        console.log(`🔍 CORS Debug - Origin: ${origin}, NODE_ENV: ${process.env.NODE_ENV}`);       // delete later
         // Allow requests with no origin (mobile apps, etc.)
         if (!origin) return callback(null, true);
         
@@ -57,13 +58,16 @@ const corsOptions = {
             ];
             
             if (allowedOrigins.includes(origin)) {
+                console.log(`✅ CORS Allowed (production): ${origin}`);    //delete later
                 return callback(null, true);
             } else {
+                console.log(`❌ CORS Blocked (production): ${origin}`);
                 console.warn(`CORS blocked origin: ${origin}`);
                 return callback(new Error('Not allowed by CORS'));
             }
         } else {
             // Development: Allow all origins
+              console.log(`✅ CORS Allowed (staging/dev): ${origin}`);
             return callback(null, true);
         }
     },
