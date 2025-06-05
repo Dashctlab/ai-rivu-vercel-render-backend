@@ -107,7 +107,6 @@ async updateUserStats(email, action, details) {
                 difficulties: {},
                 timeDurations: {},
                 avgQuestionsPerPaper: 0,
-                // NEW FIELDS
                 assessmentTypes: {},
                 testObjectives: {},
                 deviceType: 'Unknown',
@@ -135,6 +134,18 @@ async updateUserStats(email, action, details) {
 
         userStats.lastActivity = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
+
+        // Now safely update stats
+        if (details.subject) {
+            userStats.subjects[details.subject] = (userStats.subjects[details.subject] || 0) + 1;
+        }
+        
+        if (details.class || details.className) {
+            const className = details.class || details.className;
+            userStats.classes[className] = (userStats.classes[className] || 0) + 1;
+        }
+
+        
         // Track device info
         if (details.deviceType) {
             userStats.deviceType = details.deviceType;
@@ -174,13 +185,15 @@ async updateUserStats(email, action, details) {
                 if (details.questionDetails && Array.isArray(details.questionDetails)) {
                     details.questionDetails.forEach(qDetail => {
                         if (qDetail.type && qDetail.num) {
-                            userStats.questionTypes[qDetail.type] = (userStats.questionTypes[qDetail.type] || 0) + parseInt(qDetail.num);
+                            const numQuestions = parseInt(qDetail.num) || 0;
+                            userStats.questionTypes[qDetail.type] = (userStats.questionTypes[qDetail.type] || 0) + numQuestions;
                         }
                     });
                 }
 
                 if (details.tokens) {
-                    userStats.tokensUsed += details.tokens;
+                    const tokensToAdd = parseInt(details.tokens) || 0;
+                    userStats.tokensUsed = (userStats.tokensUsed || 0) + tokensToAdd;
                 }
                 break;
 

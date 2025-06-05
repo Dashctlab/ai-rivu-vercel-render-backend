@@ -7,78 +7,104 @@ class GoogleSheetsDB {
     constructor() {
         this.sheets = null;
         this.isInitialized = false;
-        this.initializeAuth();
+        this.isInitializing = false; //initialization flag
+        this.initializationPromise = null; // Cache the promise
     }
 
-async initializeAuth() {
-  try {
-    // Improved environment detection
-    const isProduction = process.env.NODE_ENV === 'production' || 
-                       (process.env.RENDER_SERVICE_NAME && process.env.RENDER_SERVICE_NAME.includes('prod')) ||
-                       process.env.VERCEL_ENV === 'production';
-    
-    this.sheetId = isProduction ? 
-      process.env.PROD_SHEET_ID : 
-      process.env.STAGING_SHEET_ID;
-
-    console.log(`Initializing Google Sheets for ${isProduction ? 'PRODUCTION' : 'STAGING'} environment`);
-    
-    if (!this.sheetId) {
-      const requiredVar = isProduction ? 'PROD_SHEET_ID' : 'STAGING_SHEET_ID';
-      throw new Error(`Sheet ID not found. Check ${requiredVar} environment variable`);
-    }
-
-    // Enhanced authentication with better error handling
-    let auth;
-    if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-      try {
-        const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-        
-        // Validate required fields
-        if (!serviceAccount.client_email || !serviceAccount.private_key) {
-          throw new Error('Invalid service account JSON: missing required fields');
+    async initializeAuth() {
+        // Return existing promise if already initializing
+        if (this.isInitializing && this.initializationPromise) {
+            return this.initializationPromise;
         }
-        
-        auth = new google.auth.JWT(
-          serviceAccount.client_email,
-          null,
-          serviceAccount.private_key,
-          ['https://www.googleapis.com/auth/spreadsheets']
-        );
-        console.log('Using direct JSON service account authentication');
-      } catch (parseError) {
-        throw new Error(`Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON: ${parseError.message}`);
-      }
-    } else if (process.env.GOOGLE_SHEETS_EMAIL && process.env.GOOGLE_SHEETS_PRIVATE_KEY) {
-      auth = new google.auth.JWT(
-        process.env.GOOGLE_SHEETS_EMAIL,
-        null,
-        process.env.GOOGLE_SHEETS_PRIVATE_KEY.replace(/\\n/g, '\n'),
-        ['https://www.googleapis.com/auth/spreadsheets']
-      );
-      console.log('Using individual field authentication');
-    } else {
-      throw new Error('No Google Sheets credentials found. Set either GOOGLE_SERVICE_ACCOUNT_JSON or individual credential fields');
+
+        //Return immediately if already initialized
+        if (this.isInitialized) {
+            return Promise.resolve();
+        }
+
+        // Set flag and cache promise to prevent race conditions
+        this.isInitializing = true;
+        this.initializationPromise = this._performInitialization();
+
+        try {
+            await this.initializationPromise;
+            this.isInitialized = true;
+        } catch (error) {
+            console.error('Google Sheets initialization failed:', error);
+            throw error;
+        } finally {
+            this.isInitializing = false;
+            this.initializationPromise = null;
+        }
     }
 
-    // Test authentication
-    this.sheets = google.sheets({ version: 'v4', auth });
-    
-    // Verify connection with a test call
-    await this.sheets.spreadsheets.get({
-      spreadsheetId: this.sheetId,
-      fields: 'properties.title'
-    });
-    
-    this.isInitialized = true;
-    console.log('Google Sheets authentication successful');
-    
-  } catch (error) {
-    console.error('Google Sheets initialization error:', error.message);
-    this.isInitialized = false;
-    throw error; // Re-throw for proper error handling
-  }
-}
+    async _performInitialization() {
+        try {
+            //  environment detection
+            const isProduction = process.env.NODE_ENV === 'production' || 
+                               (process.env.RENDER_SERVICE_NAME && process.env.RENDER_SERVICE_NAME.includes('prod')) ||
+                               process.env.VERCEL_ENV === 'production';
+            
+            this.sheetId = isProduction ? 
+              process.env.PROD_SHEET_ID : 
+              process.env.STAGING_SHEET_ID;
+
+            console.log(`Initializing Google Sheets for ${isProduction ? 'PRODUCTION' : 'STAGING'} environment`);
+            
+            if (!this.sheetId) {
+              const requiredVar = isProduction ? 'PROD_SHEET_ID' : 'STAGING_SHEET_ID';
+              throw new Error(`Sheet ID not found. Check ${requiredVar} environment variable`);
+            }
+
+            //  authentication with error handling
+            let auth;
+            if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+              try {
+                const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+                
+                // Validate required fields
+                if (!serviceAccount.client_email || !serviceAccount.private_key) {
+                  throw new Error('Invalid service account JSON: missing required fields');
+                }
+                
+                auth = new google.auth.JWT(
+                  serviceAccount.client_email,
+                  null,
+                  serviceAccount.private_key,
+                  ['https://www.googleapis.com/auth/spreadsheets']
+                );
+                console.log('Using direct JSON service account authentication');
+              } catch (parseError) {
+                throw new Error(`Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON: ${parseError.message}`);
+              }
+            } else if (process.env.GOOGLE_SHEETS_EMAIL && process.env.GOOGLE_SHEETS_PRIVATE_KEY) {
+              auth = new google.auth.JWT(
+                process.env.GOOGLE_SHEETS_EMAIL,
+                null,
+                process.env.GOOGLE_SHEETS_PRIVATE_KEY.replace(/\\n/g, '\n'),
+                ['https://www.googleapis.com/auth/spreadsheets']
+              );
+              console.log('Using individual field authentication');
+            } else {
+              throw new Error('No Google Sheets credentials found. Set either GOOGLE_SERVICE_ACCOUNT_JSON or individual credential fields');
+            }
+
+            // Test authentication
+            this.sheets = google.sheets({ version: 'v4', auth });
+            
+            // Verify connection with a test call
+            await this.sheets.spreadsheets.get({
+              spreadsheetId: this.sheetId,
+              fields: 'properties.title'
+            });
+            
+            console.log('Google Sheets authentication successful');
+            
+        } catch (error) {
+            console.error('Google Sheets initialization error:', error.message);
+            throw error;
+        }
+    }
 
     async ensureInitialized() {
         if (!this.isInitialized) {
@@ -88,10 +114,10 @@ async initializeAuth() {
             throw new Error('Google Sheets not properly initialized');
         }
     }
+}  
 
-    /**
-     * Log user activity to Activity_Logs sheet
-     */
+/** Log user activity to Activity_Logs shee **/
+
 async logActivity(email, action, details = {}) {
     try {
         await this.ensureInitialized();
