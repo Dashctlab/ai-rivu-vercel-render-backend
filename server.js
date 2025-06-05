@@ -73,7 +73,7 @@ const corsOptions = {
     },
     credentials: true,
     methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization", "useremail","X-Screen-Size"],
+    allowedHeaders: ["Content-Type", "Authorization", "useremail","X-Screen-Size","Cache-Control"],
     optionsSuccessStatus: 204
 };
 
