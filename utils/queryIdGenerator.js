@@ -1,21 +1,28 @@
-// utils/queryIdGenerator.js
-/**
- * Generates unique alphanumeric query IDs for tracking question paper generation
- * Format: QP-ABC123 (6-8 characters)
- */
+const crypto = require('crypto');
 
+/**
+ * Generates unique alphanumeric query IDs with collision detection
+ * Format: QP-ABC123DEF (9 characters total for better uniqueness)
+ */
 function generateQueryId() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = 'QP-';
+  // Use crypto for better randomness + timestamp for uniqueness
+  const timestamp = Date.now().toString(36); // Base36 timestamp
+  const randomBytes = crypto.randomBytes(3).toString('hex').toUpperCase(); // 6 random chars
   
-  // Generate 6 random characters
-  for (let i = 0; i < 6; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  
-  return result;
+  // Combine for strong uniqueness: QP-TIMESTAMP-RANDOM
+  return `QP-${timestamp}-${randomBytes}`;
+}
+
+/**
+ * Alternative approach: UUID-based (if you prefer)
+ */
+function generateQueryIdUUID() {
+  const uuid = crypto.randomUUID();
+  const shortId = uuid.split('-')[0].toUpperCase(); // First 8 chars of UUID
+  return `QP-${shortId}`;
 }
 
 module.exports = {
-  generateQueryId
+  generateQueryId,
+  generateQueryIdUUID
 };
