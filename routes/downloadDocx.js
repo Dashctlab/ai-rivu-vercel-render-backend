@@ -309,7 +309,7 @@ router.post('/', async (req, res) => {
                         children: [
                             new TextRun({ 
                                 text: `${localNum}. ${questionText}`,
-                                bold: true,
+                                bold: false,
                                 size: 24,
                                 font: 'Times New Roman'
                             }),
