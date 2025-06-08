@@ -21,7 +21,7 @@ const generateRoute = require('./generate');
 const downloadDocxRoute = require('./downloadDocx');
 const adminRoute = require('./admin');
 const curriculumRoute = require('./curriculum');
-const qualityFeedbackRoute = require('./qualityFeedback'); // NEW LINE
+const qualityFeedbackRoute = require('./qualityFeedback');
 
 // Bind them to their respective paths
 router.use('/login', loginRoute);
@@ -29,6 +29,5 @@ router.use('/generate', generateRoute);
 router.use('/download-docx', downloadDocxRoute);
 router.use('/admin', adminRoute);
 router.use('/api/curriculum', curriculumRoute);
-router.use('/api/quality-feedback', qualityFeedbackRoute); // NEW LINE
-
+router.use('/api/quality-feedback', qualityFeedbackRoute); 
 module.exports = router;
