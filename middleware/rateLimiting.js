@@ -1,14 +1,68 @@
-// middleware/rateLimiting.js - COMPLETE REPLACEMENT with user-based rate limiting and daily quotas
+// middleware/rateLimiting.js - COMPLETE REPLACEMENT with persistent storage fix
 
 const rateLimit = require('express-rate-limit');
+const fs = require('fs');
+const path = require('path');
 const { getUsers } = require('../utils/fileUtils');
 const { logger } = require('../utils/enhancedLogger');
 
-// Store for user-based rate limiting (in-memory for now)
-const userRateLimitStore = new Map();
+// FIXED: Persistent storage for rate limiting instead of in-memory Map
+const rateLimitDataFile = path.join(__dirname, '../data/rate_limits.json');
 
 /**
- * User-based rate limiter factory
+ * Load rate limiting data from file
+ */
+function loadRateLimitData() {
+    try {
+        if (fs.existsSync(rateLimitDataFile)) {
+            const data = fs.readFileSync(rateLimitDataFile, 'utf8');
+            const parsed = JSON.parse(data);
+            
+            // Clean up expired entries while loading
+            const now = Date.now();
+            const cleaned = {};
+            
+            Object.entries(parsed).forEach(([key, timestamps]) => {
+                // Keep only timestamps from last 24 hours
+                const validTimestamps = timestamps.filter(ts => (now - ts) < (24 * 60 * 60 * 1000));
+                if (validTimestamps.length > 0) {
+                    cleaned[key] = validTimestamps;
+                }
+            });
+            
+            return new Map(Object.entries(cleaned));
+        }
+    } catch (error) {
+        console.error('Error loading rate limit data:', error);
+    }
+    return new Map();
+}
+
+/**
+ * Save rate limiting data to file
+ */
+function saveRateLimitData(rateLimitStore) {
+    try {
+        // Convert Map to Object for JSON storage
+        const dataToSave = Object.fromEntries(rateLimitStore);
+        
+        // Ensure data directory exists
+        const dataDir = path.dirname(rateLimitDataFile);
+        if (!fs.existsSync(dataDir)) {
+            fs.mkdirSync(dataDir, { recursive: true });
+        }
+        
+        fs.writeFileSync(rateLimitDataFile, JSON.stringify(dataToSave, null, 2));
+    } catch (error) {
+        console.error('Error saving rate limit data:', error);
+    }
+}
+
+// FIXED: Initialize with persistent storage
+let userRateLimitStore = loadRateLimitData();
+
+/**
+ * User-based rate limiter factory with persistent storage
  */
 function createUserRateLimit(options) {
     return async (req, res, next) => {
@@ -54,9 +108,10 @@ function createUserRateLimit(options) {
         userRequests.push(now);
         userRateLimitStore.set(userKey, userRequests);
         
-        // Clean up old entries periodically (basic memory management)
-        if (Math.random() < 0.01) { // 1% chance to clean up
-            cleanupOldEntries(options.windowMs);
+        // FIXED: Save to file periodically (every 10th request)
+        if (Math.random() < 0.1) { // 10% chance to save and clean up
+            saveRateLimitData(userRateLimitStore);
+            cleanupOldEntries(24 * 60 * 60 * 1000); // Clean entries older than 24 hours
         }
         
         next();
@@ -132,16 +187,34 @@ async function checkDailyQuota(req, res, next) {
  */
 function cleanupOldEntries(maxAge) {
     const cutoff = Date.now() - maxAge;
+    let cleanedCount = 0;
     
     for (const [key, timestamps] of userRateLimitStore.entries()) {
         const validTimestamps = timestamps.filter(ts => ts > cutoff);
         if (validTimestamps.length === 0) {
             userRateLimitStore.delete(key);
-        } else {
+            cleanedCount++;
+        } else if (validTimestamps.length !== timestamps.length) {
             userRateLimitStore.set(key, validTimestamps);
         }
     }
+    
+    if (cleanedCount > 0) {
+        console.log(`Cleaned up ${cleanedCount} expired rate limit entries`);
+        saveRateLimitData(userRateLimitStore); // Save after cleanup
+    }
 }
+
+// FIXED: Graceful shutdown - save rate limit data
+process.on('SIGTERM', () => {
+    console.log('Saving rate limit data before shutdown...');
+    saveRateLimitData(userRateLimitStore);
+});
+
+process.on('SIGINT', () => {
+    console.log('Saving rate limit data before shutdown...');
+    saveRateLimitData(userRateLimitStore);
+});
 
 // Updated rate limiters with user-based approach
 const userGenerateLimiter = createUserRateLimit({
