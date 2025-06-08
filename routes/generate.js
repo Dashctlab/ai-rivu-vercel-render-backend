@@ -9,6 +9,7 @@ const config = require('../config');
 const EnhancedPromptBuilder = require('../utils/enhancedPromptBuilder');
 const { generateQueryId } = require('../utils/queryIdGenerator');
 const { detectDevice } = require('../utils/deviceDetection');
+const { validateInput, schemas } = require('../middleware/validation');
 
 // Headers required by OpenRouter
 const openRouterHeaders = {
@@ -42,7 +43,17 @@ function getActiveModel() {
 /**
  * Model testing endpoint for quick API tests
  */
-router.post('/test-model', async (req, res) => {
+router.post('/test-model', 
+             (req, res, next) => {
+        const { model } = req.body;
+        if (!model || typeof model !== 'string' || model.trim() === '') {
+            return res.status(400).json({ 
+                message: 'Model parameter is required and must be a valid string' 
+            });
+        }
+        next();
+    },
+    async (req, res) => {
     const { model, testPrompt } = req.body;
     const email = req.headers['useremail'] || 'admin';
     
@@ -180,7 +191,7 @@ function isValidQuestionPaper(content) {
 /**
  * Main generation route with enhanced tracking and error handling
  */
-router.post('/', async (req, res) => {
+router.post('/',  validateInput(schemas.generate), async (req, res) => {
     // Generate unique query ID for this request
     const queryId = generateQueryId();
     
@@ -195,25 +206,6 @@ router.post('/', async (req, res) => {
     } = req.body;
 
     const email = req.headers['useremail'] || 'anonymous';
-
-    // Validation
-    if (!curriculum || !className || !subject || !Array.isArray(questionDetails) || questionDetails.length === 0) {
-        await logActivity(email, 'Generate Failed - Missing Parameters', {
-            queryId,
-            missingFields: {
-                curriculum: !curriculum,
-                className: !className,
-                subject: !subject,
-                questionDetails: !Array.isArray(questionDetails) || questionDetails.length === 0
-            },
-            providedData: { curriculum, className, subject, questionDetailsCount: questionDetails?.length || 0 },
-            ...deviceInfo
-        });
-        return res.status(400).json({ 
-            message: 'Please fill in all required fields: curriculum board, class, subject, and question types.',
-            queryId: queryId
-        });
-    }
 
     try {
         // Enhanced logging for generation start
