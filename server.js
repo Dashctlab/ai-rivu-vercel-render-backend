@@ -1,4 +1,4 @@
-// server.js - Updated with Security Implementation
+// server.js - Updated with NEW User-Based Rate Limiting System
 require('dotenv').config();
 
 if (!process.env.OPENROUTER_API_KEY) {
@@ -12,12 +12,22 @@ const bodyParser = require('body-parser');
 
 // Security imports
 const { enforceHTTPS, securityHeaders, additionalSecurity, securityLogger } = require('./middleware/security');
-const { generalLimiter, loginLimiter, generateLimiter, downloadLimiter } = require('./middleware/rateLimiting');
+
+// UPDATED: Import new user-based rate limiting system
+const { 
+    generalLimiter, 
+    userLoginLimiter, 
+    userGenerateLimiter, 
+    userDownloadLimiter,
+    checkDailyQuota,
+    addQuotaInfo
+} = require('./middleware/rateLimiting');
+
 const { sanitizeMiddleware } = require('./middleware/validation');
 
 const config = require('./config');
 const { initializeFiles } = require('./utils/fileUtils');
-const { migratePasswords } = require('./utils/passwordUtils'); // NEW
+const { migratePasswords } = require('./utils/passwordUtils');
 const logActivity = require('./utils/enhancedLogger');
 const routes = require('./routes');
 
@@ -39,7 +49,7 @@ app.use(additionalSecurity);
 // SECURITY: Request logging for monitoring
 app.use(securityLogger);
 
-// SECURITY: General rate limiting for all requests
+// SECURITY: General rate limiting for all requests (IP-based for unauthenticated)
 app.use(generalLimiter);
 
 // CORS config
@@ -96,10 +106,13 @@ app.use(bodyParser.urlencoded({
 // SECURITY: Input sanitization
 app.use(sanitizeMiddleware);
 
-// SECURITY: Specific route rate limiting
-app.use('/login', loginLimiter);
-app.use('/generate', generateLimiter);
-app.use('/download-docx', downloadLimiter);
+// UPDATED: Apply user-based rate limiting to specific routes
+app.use('/login', userLoginLimiter);
+app.use('/generate', userGenerateLimiter, checkDailyQuota); // Add quota check for generation
+app.use('/download-docx', userDownloadLimiter);
+
+// OPTIONAL: Add quota info headers to all authenticated routes
+app.use(addQuotaInfo);
 
 // Mount routes
 app.use('/', routes);
@@ -159,7 +172,8 @@ async function startServer() {
         app.listen(PORT, async () => {
             console.log(`🚀 Server running on port ${PORT}`);
             console.log(`🔒 Security: HTTPS enforcement ${process.env.NODE_ENV === 'production' ? 'ENABLED' : 'DISABLED'}`);
-            console.log(`🛡️  Security: Rate limiting ENABLED`);
+            console.log(`🛡️  Security: User-based rate limiting ENABLED`); // UPDATED message
+            console.log(`📊 Security: Daily quota system ENABLED (20 papers/user)`); // NEW message
             console.log(`🔐 Security: Password hashing ENABLED`);
             console.log(`📋 Security: Input validation ENABLED`);
             console.log(`🌐 CORS: Allowing requests from: ${config.FRONTEND_URL}`);
@@ -170,7 +184,8 @@ async function startServer() {
                 environment: process.env.NODE_ENV || 'development',
                 httpsEnabled: process.env.NODE_ENV === 'production',
                 securityFeatures: [
-                    'Rate Limiting',
+                    'User-Based Rate Limiting', // UPDATED
+                    'Daily Quota System', // NEW
                     'Password Hashing',
                     'Input Validation',
                     'Security Headers',
