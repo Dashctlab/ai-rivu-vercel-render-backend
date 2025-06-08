@@ -7,6 +7,7 @@ node_modules/
 data/users.json
 data/activity_logs.json  
 data/user_stats.json
+data/rate_limits.json
 
 # Keep data directory structure
 !data/
