@@ -1,4 +1,4 @@
-// routes/downloadDocx.js - Enhanced formatting version
+// routes/downloadDocx.js 
 const express = require('express');
 const router = express.Router();
 
@@ -7,24 +7,41 @@ const logActivity = require('../utils/enhancedLogger');
 const { addQuestionParagraph, addOptionParagraph } = require('../utils/docxHelpers');
 
 /**
- * Enhanced DOCX generation with better formatting
+ * FIXED: Enhanced download validation to prevent server crashes
  */
 router.post('/', async (req, res) => {
-    const { subject, metadata, sections, answerKey } = req.body;
     const email = req.headers['useremail'] || 'anonymous';
-
-    // Validation (existing validation code...)
-    if (!subject || typeof subject !== 'string' || subject.trim() === '') {
-        await logActivity(email, 'Download Failed - Missing Subject', {
-            reason: 'Subject is required',
-            providedSubject: subject,
-            requestTime: new Date().toISOString()
-        });
-        return res.status(400).json({ message: "Please generate a question paper first before downloading." });
-    }
+    const downloadStartTime = new Date().toISOString();
 
     try {
-        const downloadStartTime = new Date().toISOString();
+        // FIXED: Comprehensive validation of all required fields
+        const validationResult = validateDownloadData(req.body);
+        if (!validationResult.isValid) {
+            await logActivity(email, 'Download Failed - Validation Error', {
+                reason: validationResult.error,
+                providedData: {
+                    hasSubject: !!req.body.subject,
+                    hasMetadata: !!req.body.metadata,
+                    hasSections: !!req.body.sections,
+                    hasAnswerKey: !!req.body.answerKey,
+                    sectionsType: Array.isArray(req.body.sections) ? 'array' : typeof req.body.sections,
+                    answerKeyType: Array.isArray(req.body.answerKey) ? 'array' : typeof req.body.answerKey
+                },
+                requestTime: downloadStartTime,
+                ip: req.ip,
+                userAgent: req.get('User-Agent')
+            });
+            
+            return res.status(400).json({ 
+                message: validationResult.userMessage,
+                error: 'VALIDATION_ERROR',
+                details: validationResult.error
+            });
+        }
+
+        // FIXED: Safely extract validated data
+        const { subject, metadata, sections, answerKey } = req.body;
+
         await logActivity(email, 'Download Started', {
             subject,
             className: metadata.className,
@@ -94,7 +111,7 @@ router.post('/', async (req, res) => {
             })
         );
 
-        // 🆕 FIXED: Proper header table with correct marks
+        // FIXED: Proper header table with validated marks
         const headerInfoTable = new Table({
             width: { size: 100, type: WidthType.PERCENTAGE },
             borders: {
@@ -125,7 +142,7 @@ router.post('/', async (req, res) => {
                                 new Paragraph({
                                     children: [
                                         new TextRun({ 
-                                            text: `${metadata.totalMarks || '___'}`, // 🆕 FIXED: Use actual marks
+                                            text: `${metadata.totalMarks || '___'}`,
                                             size: 28,
                                             bold: true,
                                             font: 'Times New Roman'
@@ -254,119 +271,147 @@ router.post('/', async (req, res) => {
             })
         );
 
-        // ========== IMPROVED QUESTION SECTIONS ==========
+        // ========== IMPROVED QUESTION SECTIONS WITH SAFE PROCESSING ==========
         let totalQuestions = 0;
+        
+        // FIXED: Safe section processing with validation
         sections.forEach((sec, secIndex) => {
-            // Skip exam information section in output
-            if (sec.title === 'Exam Information') return;
-            
-            // Section Header
-            docChildren.push(
-                new Paragraph({
-                    children: [
-                        new TextRun({ 
-                            text: sec.title.toUpperCase(),
-                            bold: true,
-                            size: 26,
-                            font: 'Times New Roman'
-                        })
-                    ],
-                    heading: HeadingLevel.HEADING_2,
-                    spacing: { before: 400, after: 250 },
-                    alignment: AlignmentType.LEFT,
-                    border: {
-                        bottom: {
-                            color: '000000',
-                            space: 1,
-                            value: 'single',
-                            size: 3
-                        }
-                    }
-                })
-            );
-
-            let localNum = 1;
-            sec.questions.forEach(qBlock => {
-                const lines = qBlock.split('\n').filter(Boolean);
+            try {
+                // Skip exam information section in output
+                if (!sec || !sec.title || sec.title === 'Exam Information') return;
                 
-                // 🆕 IMPROVED: Better question formatting with marks on same line
-                const firstLine = lines[0];
-                const remainingLines = lines.slice(1);
-                
-                // Try to extract marks from the question text
-                const marksMatch = firstLine.match(/\((\d+)\s*marks?\)/i);
-                let questionText = firstLine;
-                let marksText = '';
-                
-                if (marksMatch) {
-                    questionText = firstLine.replace(/\((\d+)\s*marks?\)/i, '').trim();
-                    marksText = `(${marksMatch[1]} marks)`;
-                }
-                
-                // Main question with marks on the same line, right-aligned
+                // Section Header
                 docChildren.push(
                     new Paragraph({
                         children: [
                             new TextRun({ 
-                                text: `${localNum}. ${questionText}`,
-                                bold: false,
-                                size: 24,
-                                font: 'Times New Roman'
-                            }),
-                            new TextRun({ 
-                                text: `\t${marksText}`, // Tab to right-align marks
+                                text: sec.title.toUpperCase(),
                                 bold: true,
-                                size: 20,
+                                size: 26,
                                 font: 'Times New Roman'
                             })
                         ],
-                        spacing: { before: 200, after: 120 },
-                        indent: { left: 0 },
-                        tabStops: [
-                            {
-                                type: TabStopType.RIGHT,
-                                position: 9000 // Right-align marks
+                        heading: HeadingLevel.HEADING_2,
+                        spacing: { before: 400, after: 250 },
+                        alignment: AlignmentType.LEFT,
+                        border: {
+                            bottom: {
+                                color: '000000',
+                                space: 1,
+                                value: 'single',
+                                size: 3
                             }
-                        ]
+                        }
                     })
                 );
 
-                // Options/continuation with proper indentation
-                remainingLines.forEach(opt => {
-                    if (opt.trim()) {
-                        docChildren.push(
-                            new Paragraph({
-                                children: [
-                                    new TextRun({ 
-                                        text: opt.trim(),
-                                        size: 22,
-                                        font: 'Times New Roman'
-                                    })
-                                ],
-                                indent: { left: 720 },
-                                spacing: { after: 80 }
-                            })
-                        );
-                    }
-                });
+                let localNum = 1;
+                
+                // FIXED: Safe question processing
+                if (sec.questions && Array.isArray(sec.questions)) {
+                    sec.questions.forEach(qBlock => {
+                        try {
+                            // FIXED: Validate question block
+                            if (!qBlock || typeof qBlock !== 'string') {
+                                console.warn(`Invalid question block in section ${sec.title}:`, qBlock);
+                                return;
+                            }
 
-                localNum++;
-                totalQuestions++;
-            });
+                            const lines = qBlock.split('\n').filter(Boolean);
+                            
+                            if (lines.length === 0) return;
 
-            // Add space between sections
-            if (secIndex < sections.length - 1) {
-                docChildren.push(
-                    new Paragraph({
-                        text: '',
-                        spacing: { after: 300 }
-                    })
-                );
+                            // FIXED: Better question formatting with marks on same line
+                            const firstLine = lines[0];
+                            const remainingLines = lines.slice(1);
+                            
+                            // Try to extract marks from the question text
+                            const marksMatch = firstLine.match(/\((\d+(?:\.\d+)?)\s*marks?\)/i);
+                            let questionText = firstLine;
+                            let marksText = '';
+                            
+                            if (marksMatch) {
+                                questionText = firstLine.replace(/\((\d+(?:\.\d+)?)\s*marks?\)/i, '').trim();
+                                marksText = `(${marksMatch[1]} marks)`;
+                            }
+                            
+                            // Main question with marks on the same line, right-aligned
+                            docChildren.push(
+                                new Paragraph({
+                                    children: [
+                                        new TextRun({ 
+                                            text: `${localNum}. ${questionText}`,
+                                            bold: false,
+                                            size: 24,
+                                            font: 'Times New Roman'
+                                        }),
+                                        new TextRun({ 
+                                            text: `\t${marksText}`, // Tab to right-align marks
+                                            bold: true,
+                                            size: 20,
+                                            font: 'Times New Roman'
+                                        })
+                                    ],
+                                    spacing: { before: 200, after: 120 },
+                                    indent: { left: 0 },
+                                    tabStops: [
+                                        {
+                                            type: TabStopType.RIGHT,
+                                            position: 9000 // Right-align marks
+                                        }
+                                    ]
+                                })
+                            );
+
+                            // Options/continuation with proper indentation
+                            remainingLines.forEach(opt => {
+                                if (opt.trim()) {
+                                    docChildren.push(
+                                        new Paragraph({
+                                            children: [
+                                                new TextRun({ 
+                                                    text: opt.trim(),
+                                                    size: 22,
+                                                    font: 'Times New Roman'
+                                                })
+                                            ],
+                                            indent: { left: 720 },
+                                            spacing: { after: 80 }
+                                        })
+                                    );
+                                }
+                            });
+
+                            localNum++;
+                            totalQuestions++;
+                            
+                        } catch (questionError) {
+                            console.error(`Error processing question in section ${sec.title}:`, questionError);
+                            // Continue processing other questions
+                        }
+                    });
+                } else {
+                    console.warn(`Section ${sec.title} has invalid questions array:`, sec.questions);
+                }
+
+                // Add space between sections
+                if (secIndex < sections.length - 1) {
+                    docChildren.push(
+                        new Paragraph({
+                            text: '',
+                            spacing: { after: 300 }
+                        })
+                    );
+                }
+                
+            } catch (sectionError) {
+                console.error(`Error processing section ${secIndex}:`, sectionError);
+                // Continue processing other sections
             }
         });
 
-        // ========== ENHANCED ANSWER KEY SECTION ==========
-        docChildren.push(new Paragraph({ children: [new PageBreak()] })); // 🆕 NEW PAGE
+        // ========== ENHANCED ANSWER KEY SECTION WITH SAFE PROCESSING ==========
+        docChildren.push(new Paragraph({ children: [new PageBreak()] })); // NEW PAGE
         
         docChildren.push(
             new Paragraph({
@@ -392,31 +437,42 @@ router.post('/', async (req, res) => {
             })
         );
 
-        // 🆕 IMPROVED: Clean answer formatting
+        // FIXED: Safe answer key processing
         answerKey.forEach((ans, idx) => {
-            // Clean the answer text - remove any existing numbering
-            const cleanAnswer = ans.replace(/^\d+[\.\)]\s*/, '').replace(/^answer\s*:?\s*/i, '').trim();
-            
-            if (cleanAnswer) {
-                docChildren.push(
-                    new Paragraph({
-                        children: [
-                            new TextRun({ 
-                                text: `${idx + 1}. `,
-                                bold: true,
-                                size: 24,
-                                font: 'Times New Roman'
-                            }),
-                            new TextRun({ 
-                                text: cleanAnswer,
-                                size: 24,
-                                font: 'Times New Roman'
-                            })
-                        ],
-                        spacing: { after: 120 },
-                        indent: { left: 360 }
-                    })
-                );
+            try {
+                // FIXED: Validate answer entry
+                if (!ans || typeof ans !== 'string') {
+                    console.warn(`Invalid answer at index ${idx}:`, ans);
+                    return;
+                }
+
+                // Clean the answer text - remove any existing numbering
+                const cleanAnswer = ans.replace(/^\d+[\.\)]\s*/, '').replace(/^answer\s*:?\s*/i, '').trim();
+                
+                if (cleanAnswer) {
+                    docChildren.push(
+                        new Paragraph({
+                            children: [
+                                new TextRun({ 
+                                    text: `${idx + 1}. `,
+                                    bold: true,
+                                    size: 24,
+                                    font: 'Times New Roman'
+                                }),
+                                new TextRun({ 
+                                    text: cleanAnswer,
+                                    size: 24,
+                                    font: 'Times New Roman'
+                                })
+                            ],
+                            spacing: { after: 120 },
+                            indent: { left: 360 }
+                        })
+                    );
+                }
+            } catch (answerError) {
+                console.error(`Error processing answer ${idx}:`, answerError);
+                // Continue processing other answers
             }
         });
 
@@ -475,18 +531,267 @@ router.post('/', async (req, res) => {
         console.error(`DOCX Generation Error:`, error);
         
         await logActivity(email, 'Download Failed DOCX - Error: ' + error.message, {
-            subject,
-            class: metadata?.className,
+            subject: req.body?.subject,
+            class: req.body?.metadata?.className,
             errorType: 'DOCX_GENERATION_ERROR',
             errorMessage: error.message,
             errorStack: error.stack,
-            errorTime: new Date().toISOString()
+            errorTime: new Date().toISOString(),
+            requestBody: {
+                hasSubject: !!req.body?.subject,
+                hasMetadata: !!req.body?.metadata,
+                hasSections: !!req.body?.sections,
+                hasAnswerKey: !!req.body?.answerKey
+            }
         });
 
         if (!res.headersSent) {
-            res.status(500).json({ message: `Failed to generate Word file: ${error.message}` });
+            res.status(500).json({ 
+                message: `Failed to generate Word file. Please try again.`,
+                error: 'GENERATION_ERROR'
+            });
         }
     }
 });
+
+/**
+ * FIXED: Comprehensive download data validation function
+ */
+function validateDownloadData(body) {
+    // Check if body exists
+    if (!body || typeof body !== 'object') {
+        return {
+            isValid: false,
+            error: 'Request body is missing or invalid',
+            userMessage: 'Invalid request. Please generate a question paper first.'
+        };
+    }
+
+    const { subject, metadata, sections, answerKey } = body;
+
+    // 1. Validate subject
+    if (!subject || typeof subject !== 'string' || subject.trim() === '') {
+        return {
+            isValid: false,
+            error: 'Subject is missing or invalid',
+            userMessage: 'Please generate a question paper first before downloading.'
+        };
+    }
+
+    if (subject.length > 200) {
+        return {
+            isValid: false,
+            error: 'Subject is too long',
+            userMessage: 'Subject name is too long. Please use a shorter subject name.'
+        };
+    }
+
+    // 2. Validate metadata
+    if (!metadata || typeof metadata !== 'object') {
+        return {
+            isValid: false,
+            error: 'Metadata is missing or invalid',
+            userMessage: 'Question paper metadata is missing. Please generate the paper again.'
+        };
+    }
+
+    // Required metadata fields
+    const requiredMetadataFields = ['curriculum', 'className', 'totalMarks', 'timeDuration'];
+    for (const field of requiredMetadataFields) {
+        if (!metadata[field]) {
+            return {
+                isValid: false,
+                error: `Metadata field '${field}' is missing`,
+                userMessage: 'Question paper information is incomplete. Please generate the paper again.'
+            };
+        }
+    }
+
+    // Validate totalMarks format
+    const totalMarks = metadata.totalMarks;
+    if (typeof totalMarks === 'string') {
+        if (!/^\d+(\.\d{1})?$/.test(totalMarks)) {
+            return {
+                isValid: false,
+                error: 'Invalid totalMarks format',
+                userMessage: 'Total marks format is invalid. Please regenerate the question paper.'
+            };
+        }
+    } else if (typeof totalMarks === 'number') {
+        if (totalMarks < 0 || totalMarks > 1000) {
+            return {
+                isValid: false,
+                error: 'totalMarks out of range',
+                userMessage: 'Total marks value is out of valid range. Please regenerate the question paper.'
+            };
+        }
+    } else {
+        return {
+            isValid: false,
+            error: 'totalMarks must be string or number',
+            userMessage: 'Total marks format is invalid. Please regenerate the question paper.'
+        };
+    }
+
+    // 3. Validate sections
+    if (!sections) {
+        return {
+            isValid: false,
+            error: 'Sections array is missing',
+            userMessage: 'Question paper sections are missing. Please generate the paper again.'
+        };
+    }
+
+    if (!Array.isArray(sections)) {
+        return {
+            isValid: false,
+            error: 'Sections must be an array',
+            userMessage: 'Question paper format is invalid. Please generate the paper again.'
+        };
+    }
+
+    if (sections.length === 0) {
+        return {
+            isValid: false,
+            error: 'Sections array is empty',
+            userMessage: 'No question sections found. Please generate the paper again.'
+        };
+    }
+
+    if (sections.length > 20) {
+        return {
+            isValid: false,
+            error: 'Too many sections',
+            userMessage: 'Question paper has too many sections. Please simplify and regenerate.'
+        };
+    }
+
+    // Validate each section
+    for (let i = 0; i < sections.length; i++) {
+        const section = sections[i];
+        
+        if (!section || typeof section !== 'object') {
+            return {
+                isValid: false,
+                error: `Section ${i} is invalid`,
+                userMessage: 'One or more question sections are corrupted. Please regenerate the paper.'
+            };
+        }
+
+        if (!section.title || typeof section.title !== 'string') {
+            return {
+                isValid: false,
+                error: `Section ${i} title is missing or invalid`,
+                userMessage: 'Question section titles are missing. Please regenerate the paper.'
+            };
+        }
+
+        if (section.title.length > 200) {
+            return {
+                isValid: false,
+                error: `Section ${i} title is too long`,
+                userMessage: 'Question section title is too long. Please regenerate the paper.'
+            };
+        }
+
+        if (!section.questions) {
+            return {
+                isValid: false,
+                error: `Section ${i} questions are missing`,
+                userMessage: 'Questions are missing from sections. Please regenerate the paper.'
+            };
+        }
+
+        if (!Array.isArray(section.questions)) {
+            return {
+                isValid: false,
+                error: `Section ${i} questions must be an array`,
+                userMessage: 'Question format is invalid. Please regenerate the paper.'
+            };
+        }
+
+        if (section.questions.length > 50) {
+            return {
+                isValid: false,
+                error: `Section ${i} has too many questions`,
+                userMessage: 'Section has too many questions. Please reduce and regenerate.'
+            };
+        }
+
+        // Validate each question in the section
+        for (let j = 0; j < section.questions.length; j++) {
+            const question = section.questions[j];
+            
+            if (question !== null && question !== undefined && typeof question !== 'string') {
+                return {
+                    isValid: false,
+                    error: `Section ${i}, question ${j} must be a string`,
+                    userMessage: 'Question format is invalid. Please regenerate the paper.'
+                };
+            }
+
+            if (typeof question === 'string' && question.length > 5000) {
+                return {
+                    isValid: false,
+                    error: `Section ${i}, question ${j} is too long`,
+                    userMessage: 'One or more questions are too long. Please regenerate the paper.'
+                };
+            }
+        }
+    }
+
+    // 4. Validate answerKey
+    if (!answerKey) {
+        return {
+            isValid: false,
+            error: 'Answer key is missing',
+            userMessage: 'Answer key is missing. Please generate the paper again.'
+        };
+    }
+
+    if (!Array.isArray(answerKey)) {
+        return {
+            isValid: false,
+            error: 'Answer key must be an array',
+            userMessage: 'Answer key format is invalid. Please generate the paper again.'
+        };
+    }
+
+    if (answerKey.length > 100) {
+        return {
+            isValid: false,
+            error: 'Answer key has too many entries',
+            userMessage: 'Answer key is too large. Please reduce questions and regenerate.'
+        };
+    }
+
+    // Validate each answer
+    for (let i = 0; i < answerKey.length; i++) {
+        const answer = answerKey[i];
+        
+        if (answer !== null && answer !== undefined && typeof answer !== 'string') {
+            return {
+                isValid: false,
+                error: `Answer ${i} must be a string`,
+                userMessage: 'Answer key format is invalid. Please regenerate the paper.'
+            };
+        }
+
+        if (typeof answer === 'string' && answer.length > 1000) {
+            return {
+                isValid: false,
+                error: `Answer ${i} is too long`,
+                userMessage: 'One or more answers are too long. Please regenerate the paper.'
+            };
+        }
+    }
+
+    // All validations passed
+    return {
+        isValid: true,
+        error: null,
+        userMessage: null
+    };
+}
 
 module.exports = router;
