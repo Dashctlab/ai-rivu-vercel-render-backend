@@ -1,4 +1,4 @@
-// middleware/validation.js - FIXED VERSION with Bug Fix #4
+// middleware/validation.js - FIXED VERSION with Half Marks Support (0.5 increments)
 const Joi = require('joi');
 
 // Validation schemas
@@ -25,7 +25,7 @@ const schemas = {
       })
   }),
 
-  // BUG FIX #4: Enhanced question generation validation for Indian education context
+  // FIXED: Enhanced question generation validation with half marks support
   generate: Joi.object({
     curriculum: Joi.string()
       .valid('CBSE', 'Karnataka State Board', 'Tamil Nadu State Board')
@@ -41,24 +41,22 @@ const schemas = {
         'string.pattern.base': 'Invalid class format. Use "Class X" format',
         'any.required': 'Class is required'
       }),
-    // BUG FIX #4: Updated subject validation for Indian education context
     subject: Joi.string()
       .min(2)
-      .max(100) // Increased from 50 to accommodate longer Indian subject names
+      .max(100)
       .required()
-      .pattern(/^[\w\s\-&'.,()]+$/u) // BUG FIX #4: Allow common educational symbols and Unicode
+      .pattern(/^[\w\s\-&'.,()]+$/u)
       .messages({
         'string.min': 'Subject must be at least 2 characters',
         'string.max': 'Subject must be less than 100 characters',
         'string.pattern.base': 'Subject contains invalid characters. Allowed: letters, numbers, spaces, hyphens, ampersands, apostrophes, periods, commas, and parentheses',
         'any.required': 'Subject is required'
       }),
-    // BUG FIX #4: Updated topic validation for educational context
     topic: Joi.string()
-      .max(300) // Increased from 200
+      .max(300)
       .allow('')
       .optional()
-      .pattern(/^[\w\s\-&'.,()]+$/u) // BUG FIX #4: Same pattern as subject
+      .pattern(/^[\w\s\-&'.,()]+$/u)
       .messages({
         'string.max': 'Topic must be less than 300 characters',
         'string.pattern.base': 'Topic contains invalid characters. Use standard educational terms with common punctuation'
@@ -87,12 +85,11 @@ const schemas = {
             'any.only': 'Invalid question type selected',
             'any.required': 'Question type is required'
           }),
-        // BUG FIX #4: Enhanced topic validation for question-level topics
         topic: Joi.string()
           .max(200)
           .allow('')
           .optional()
-          .pattern(/^[\w\s\-&'.,():]+$/u) // BUG FIX #4: Allow colons for topics like "Chapter 1: Introduction"
+          .pattern(/^[\w\s\-&'.,():]+$/u)
           .messages({
             'string.max': 'Question topic must be less than 200 characters',
             'string.pattern.base': 'Question topic contains invalid characters'
@@ -107,15 +104,25 @@ const schemas = {
             'number.max': 'Number of questions cannot exceed 25',
             'any.required': 'Number of questions is required'
           }),
+        // FIXED: Half marks support - changed from integer() to number() with 0.5 increment validation
         marks: Joi.number()
-          .integer()
-          .min(1)
+          .min(0.5)
           .max(50)
           .required()
+          .custom((value, helpers) => {
+            // FIXED: Validate 0.5 increments (curriculum standard)
+            if ((value * 2) % 1 !== 0) {
+              return helpers.error('any.invalid', { 
+                message: 'Marks must be in 0.5 increments (e.g., 0.5, 1, 1.5, 2, 2.5)' 
+              });
+            }
+            return value;
+          })
           .messages({
-            'number.min': 'Marks per question must be at least 1',
+            'number.min': 'Marks per question must be at least 0.5',
             'number.max': 'Marks per question cannot exceed 50',
-            'any.required': 'Marks per question is required'
+            'any.required': 'Marks per question is required',
+            'any.invalid': 'Marks must be in 0.5 increments (e.g., 0.5, 1, 1.5, 2, 2.5)'
           })
       }))
       .required()
@@ -150,12 +157,11 @@ const schemas = {
         'number.max': 'Time duration cannot exceed 300 minutes',
         'any.required': 'Time duration is required'
       }),
-    // BUG FIX #4: Enhanced additional conditions validation
     additionalConditions: Joi.string()
-      .max(1000) // Increased from 500
+      .max(1000)
       .allow('')
       .optional()
-      .pattern(/^[\w\s\-&'.,():;!?]+$/u) // BUG FIX #4: Allow more educational punctuation
+      .pattern(/^[\w\s\-&'.,():;!?]+$/u)
       .messages({
         'string.max': 'Additional conditions must be less than 1000 characters',
         'string.pattern.base': 'Additional conditions contain invalid characters'
@@ -169,13 +175,13 @@ const schemas = {
       })
   }),
 
-  // Download validation
+  // FIXED: Download validation with decimal marks support
   download: Joi.object({
     subject: Joi.string()
       .min(2)
-      .max(100) // Increased consistency
+      .max(100)
       .required()
-      .pattern(/^[\w\s\-&'.,()]+$/u) // BUG FIX #4: Consistent with generate validation
+      .pattern(/^[\w\s\-&'.,()]+$/u)
       .messages({
         'string.min': 'Subject must be at least 2 characters',
         'string.max': 'Subject must be less than 100 characters',
@@ -184,7 +190,11 @@ const schemas = {
     metadata: Joi.object({
       curriculum: Joi.string().required(),
       className: Joi.string().required(),
-      totalMarks: Joi.alternatives([Joi.string(), Joi.number()]).required(),
+      // FIXED: Allow decimal total marks in download metadata
+      totalMarks: Joi.alternatives([
+        Joi.string().pattern(/^\d+(\.\d{1})?$/),  // String format: "12.5" or "12"
+        Joi.number().min(0).max(1000)             // Number format: 12.5 or 12
+      ]).required(),
       timeDuration: Joi.string().required()
     }).required(),
     sections: Joi.array().min(1).required(),
@@ -192,7 +202,7 @@ const schemas = {
   })
 };
 
-// FIXED: Validation middleware factory function (this was missing!)
+// FIXED: Validation middleware factory function
 function validateInput(schema) {
     return (req, res, next) => {
         const { error, value } = schema.validate(req.body, {
@@ -222,7 +232,7 @@ function validateInput(schema) {
     };
 }
 
-// BUG FIX #4: Enhanced sanitization for Indian education context
+// Enhanced sanitization for Indian education context
 function sanitizeInput(input) {
   if (typeof input !== 'string') return input;
   
@@ -240,7 +250,7 @@ function sanitizeInput(input) {
     .substring(0, 1000); // Prevent extremely long inputs
 }
 
-// BUG FIX #4: Enhanced sanitization middleware with better education support
+// Enhanced sanitization middleware with better education support
 function sanitizeMiddleware(req, res, next) {
   function sanitizeObject(obj) {
     for (const key in obj) {
