@@ -63,8 +63,10 @@ const corsOptions = {
         if (process.env.NODE_ENV === 'production') {
             const allowedOrigins = [
                 config.FRONTEND_URL,
-                'https://ai-rivu.vercel.app', // Your frontend domain
-                'https://ai-rivu-vercel-render-backend-staging.onrender.com' // Backend domain
+                'https://ai-rivu.vercel.app', // frontend domain
+                'https://ai-rivu-vercel-render-backend-staging.onrender.com',// Backend domain
+                 'https://ai-rivu.com',           
+                  'https://www.ai-rivu.com'       
             ];
             
             if (allowedOrigins.includes(origin)) {
