@@ -19,7 +19,7 @@ const {
     userLoginLimiter, 
     userGenerateLimiter, 
     userDownloadLimiter,
-    checkDailyQuota,
+    checkFreeTierQuota,
     addQuotaInfo
 } = require('./middleware/rateLimiting');
 
@@ -110,7 +110,7 @@ app.use(sanitizeMiddleware);
 
 // UPDATED: Apply user-based rate limiting to specific routes
 app.use('/login', userLoginLimiter);
-app.use('/generate', userGenerateLimiter, checkDailyQuota); // Add quota check for generation
+app.use('/generate', userGenerateLimiter, checkFreeTierQuota); // Add quota check for generation
 app.use('/download-docx', userDownloadLimiter);
 
 // OPTIONAL: Add quota info headers to all authenticated routes
@@ -174,8 +174,8 @@ async function startServer() {
         app.listen(PORT, async () => {
             console.log(`🚀 Server running on port ${PORT}`);
             console.log(`🔒 Security: HTTPS enforcement ${process.env.NODE_ENV === 'production' ? 'ENABLED' : 'DISABLED'}`);
-            console.log(`🛡️  Security: User-based rate limiting ENABLED`); // UPDATED message
-            console.log(`📊 Security: Daily quota system ENABLED (20 papers/user)`); // NEW message
+            console.log(`🛡️  Security: User-based rate limiting ENABLED`); 
+            console.log(`📊 Free tier quota system ENABLED (20 papers/user)`); 
             console.log(`🔐 Security: Password hashing ENABLED`);
             console.log(`📋 Security: Input validation ENABLED`);
             console.log(`🌐 CORS: Allowing requests from: ${config.FRONTEND_URL}`);
