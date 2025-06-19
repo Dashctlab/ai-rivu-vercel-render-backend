@@ -1,4 +1,4 @@
-// middleware/rateLimiting.js - COMPLETE REPLACEMENT with persistent storage fix
+// middleware/rateLimiting.js - FIXED quota terminology and messaging
 
 const rateLimit = require('express-rate-limit');
 const fs = require('fs');
@@ -119,9 +119,9 @@ function createUserRateLimit(options) {
 }
 
 /**
- * Daily quota checker for freemium limits
+ * FIXED: Freemium tier quota checker (renamed from daily quota)
  */
-async function checkDailyQuota(req, res, next) {
+async function checkFreeTierQuota(req, res, next) {
     const email = req.headers['useremail'];
     
     if (!email) {
@@ -136,43 +136,44 @@ async function checkDailyQuota(req, res, next) {
         const userStats = await logger.getUserStats(email);
         const totalPapersGenerated = userStats?.totalPapersGenerated || 0;
         
-        // Check against daily quota (20 papers for freemium)
-        const DAILY_QUOTA = 20;
+        // FIXED: Free tier limit (renamed from daily quota)
+        const FREE_TIER_LIMIT = 20;
         
-        if (totalPapersGenerated >= DAILY_QUOTA) {
-            await logger.logActivity(email, 'Daily Quota Exceeded', {
+        if (totalPapersGenerated >= FREE_TIER_LIMIT) {
+            await logger.logActivity(email, 'Free Tier Quota Exceeded', {
                 totalPapersGenerated,
-                dailyQuota: DAILY_QUOTA,
-                quotaExceededBy: totalPapersGenerated - DAILY_QUOTA,
+                freeTierLimit: FREE_TIER_LIMIT,
+                quotaExceededBy: totalPapersGenerated - FREE_TIER_LIMIT,
                 ip: req.ip,
                 userAgent: req.get('User-Agent')
             });
 
             return res.status(429).json({
-                error: 'Daily quota exceeded',
-                message: `You've reached your limit of ${DAILY_QUOTA} question papers. Contact hello@ai-rivu.com for extended access or upgrade options.`,
+                error: 'Free tier quota exceeded',
+                message: `You've generated ${FREE_TIER_LIMIT} question papers (free account limit reached). Contact us to upgrade your account.`,
                 quota: {
                     used: totalPapersGenerated,
-                    limit: DAILY_QUOTA,
-                    contactEmail: 'hello@ai-rivu.com'
+                    limit: FREE_TIER_LIMIT,
+                    contactPhone: '+91-8828015315',
+                    contactPage: '/contact.html'
                 },
                 errorCode: 'QUOTA_EXCEEDED'
             });
         }
         
-        // Log approaching quota (warn at 18/20)
-        if (totalPapersGenerated >= DAILY_QUOTA - 2) {
-            await logger.logActivity(email, 'Approaching Daily Quota', {
+        // FIXED: Log approaching quota (warn at 18/20)
+        if (totalPapersGenerated >= FREE_TIER_LIMIT - 2) {
+            await logger.logActivity(email, 'Approaching Free Tier Quota', {
                 totalPapersGenerated,
-                dailyQuota: DAILY_QUOTA,
-                remaining: DAILY_QUOTA - totalPapersGenerated
+                freeTierLimit: FREE_TIER_LIMIT,
+                remaining: FREE_TIER_LIMIT - totalPapersGenerated
             });
         }
         
         next();
         
     } catch (error) {
-        console.error('Error checking daily quota:', error);
+        console.error('Error checking free tier quota:', error);
         // Don't block user if quota check fails - log and continue
         await logger.logActivity(email, 'Quota Check Failed', {
             error: error.message,
@@ -260,7 +261,7 @@ const generalLimiter = rateLimit({
 });
 
 /**
- * Quota warning middleware for frontend
+ * FIXED: Quota warning middleware for frontend (renamed from daily)
  */
 async function addQuotaInfo(req, res, next) {
     const email = req.headers['useremail'];
@@ -269,13 +270,13 @@ async function addQuotaInfo(req, res, next) {
         try {
             const userStats = await logger.getUserStats(email);
             const totalPapersGenerated = userStats?.totalPapersGenerated || 0;
-            const DAILY_QUOTA = 20;
+            const FREE_TIER_LIMIT = 20;
             
             // Add quota info to response headers for frontend
             res.set({
                 'X-Quota-Used': totalPapersGenerated.toString(),
-                'X-Quota-Limit': DAILY_QUOTA.toString(),
-                'X-Quota-Remaining': Math.max(0, DAILY_QUOTA - totalPapersGenerated).toString()
+                'X-Quota-Limit': FREE_TIER_LIMIT.toString(),
+                'X-Quota-Remaining': Math.max(0, FREE_TIER_LIMIT - totalPapersGenerated).toString()
             });
         } catch (error) {
             // Silent fail - don't block request
@@ -291,11 +292,12 @@ module.exports = {
     userLoginLimiter,
     userGenerateLimiter,
     userDownloadLimiter,
-    checkDailyQuota,
+    checkFreeTierQuota, // FIXED: Renamed export
     addQuotaInfo,
     
     // Legacy exports (keep for backward compatibility)
     loginLimiter: userLoginLimiter,
     generateLimiter: userGenerateLimiter,
-    downloadLimiter: userDownloadLimiter
+    downloadLimiter: userDownloadLimiter,
+    checkDailyQuota: checkFreeTierQuota // FIXED: Legacy alias
 };
