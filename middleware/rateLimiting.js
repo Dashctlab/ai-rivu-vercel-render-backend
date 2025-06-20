@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { getUsers } = require('../utils/fileUtils');
 const { logger } = require('../utils/enhancedLogger');
-
+const { getErrorMessage } = require('../utils/errorMessages');
 // FIXED: Persistent storage for rate limiting instead of in-memory Map
 const rateLimitDataFile = path.join(__dirname, '../data/rate_limits.json');
 
@@ -150,7 +150,7 @@ async function checkFreeTierQuota(req, res, next) {
 
             return res.status(429).json({
                 error: 'Free tier quota exceeded',
-                message: `You've generated ${FREE_TIER_LIMIT} question papers (free account limit reached). Contact us to upgrade your account.`,
+                message: getErrorMessage('QUOTA_EXCEEDED'),
                 quota: {
                     used: totalPapersGenerated,
                     limit: FREE_TIER_LIMIT,
@@ -222,21 +222,21 @@ const userGenerateLimiter = createUserRateLimit({
     name: 'generate',
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 15, // 15 papers per 15 minutes
-    message: 'You\'re generating papers too quickly. Please wait 15 minutes and try again.'
+    message: getErrorMessage('GENERATING_TOO_FAST')
 });
 
 const userLoginLimiter = createUserRateLimit({
     name: 'login',
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 8, // 8 attempts per 15 minutes
-    message: 'Too many login attempts. Please wait 15 minutes before trying again.'
+    message: getErrorMessage('TOO_MANY_LOGIN_ATTEMPTS')
 });
 
 const userDownloadLimiter = createUserRateLimit({
     name: 'download',
     windowMs: 5 * 60 * 1000, // 5 minutes
     max: 30, // 30 downloads per 5 minutes
-    message: 'Download limit reached. Please wait 5 minutes before downloading more files.'
+    message: getErrorMessage('DOWNLOADING_TOO_FAST')
 });
 
 // Keep general IP-based limiter for unauthenticated requests

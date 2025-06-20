@@ -1,4 +1,4 @@
-// routes/generate.js - Complete file with device tracking and query ID integration
+// routes/generate.js
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
@@ -10,6 +10,7 @@ const EnhancedPromptBuilder = require('../utils/enhancedPromptBuilder');
 const { generateQueryId } = require('../utils/queryIdGenerator');
 const { detectDevice } = require('../utils/deviceDetection');
 const { validateInput, schemas } = require('../middleware/validation');
+const { getErrorMessage } = require('../utils/errorMessages'); 
 
 // Headers required by OpenRouter
 const openRouterHeaders = {
@@ -48,7 +49,8 @@ router.post('/test-model',
         const { model } = req.body;
         if (!model || typeof model !== 'string' || model.trim() === '') {
             return res.status(400).json({ 
-                message: 'Model parameter is required and must be a valid string' 
+                message: getErrorMessage('MISSING_REQUIRED_FIELDS'), // : Use centralized message
+                errorCode: 'MISSING_REQUIRED_FIELDS'
             });
         }
         next();
@@ -58,7 +60,10 @@ router.post('/test-model',
     const email = req.headers['useremail'] || 'admin';
     
     if (!model) {
-        return res.status(400).json({ message: 'Model parameter required' });
+        return res.status(400).json({ 
+            message: getErrorMessage('MISSING_REQUIRED_FIELDS'), 
+            errorCode: 'MISSING_REQUIRED_FIELDS'
+        });
     }
     
     try {
@@ -128,7 +133,8 @@ router.post('/test-model',
             model: model,
             error: error.message,
             httpStatus: error.response?.status,
-            message: `Failed to test model: ${error.message}`
+            message: getErrorMessage('AI_SERVICE_ERROR'), 
+            errorCode: 'AI_SERVICE_ERROR'
         });
     }
 });
@@ -311,15 +317,15 @@ router.post('/',  validateInput(schemas.generate), async (req, res) => {
                     response.data = retryResponse.data;
                     content = retryContent;
                 } else {
-                    throw new Error("AI is asking for clarification instead of generating the question paper. Please try again with more specific requirements.");
+                    throw new Error(getErrorMessage('AI_INVALID_RESPONSE')); 
                 }
             } catch (retryError) {
                 console.error('Retry failed:', retryError.message);
-                throw new Error("Unable to generate question paper. Please provide more specific details about your requirements and try again.");
+                throw new Error(getErrorMessage('AI_INVALID_RESPONSE')); 
             }
         }
 
-        if (!content) throw new Error("Unable to generate question paper. Please try again.");
+        if (!content) throw new Error(getErrorMessage('GENERATION_FAILED')); 
 
         const users = getUsers();
         const usage = response.data.usage || { total_tokens: 0 };
@@ -395,42 +401,42 @@ router.post('/',  validateInput(schemas.generate), async (req, res) => {
             ...deviceInfo
         });
 
-        // Enhanced teacher-friendly error responses
+        // : Enhanced teacher-friendly error responses using centralized messages
         if (error.response?.status === 401) {
             res.status(500).json({ 
-                message: "Unable to connect to our AI service. Please try again later, if issue persists contact support.",
+                message: getErrorMessage('AI_SERVICE_ERROR'),
                 queryId: queryId,
-                errorCode: "CONNECTION_ERROR"
+                errorCode: "AI_SERVICE_ERROR"
             });
         } else if (error.response?.status === 429) {
             res.status(500).json({ 
-                message: "Our AI service is currently busy. Please wait a moment and try again.",
+                message: getErrorMessage('AI_SERVICE_BUSY'),
                 queryId: queryId,
-                errorCode: "SERVICE_BUSY"
+                errorCode: "AI_SERVICE_BUSY"
             });
         } else if (error.response?.status === 400) {
             res.status(500).json({ 
-                message: "There was an issue with your request. Please check your inputs and try again.",
+                message: getErrorMessage('AI_INVALID_RESPONSE'),
                 queryId: queryId,
-                errorCode: "INVALID_REQUEST"
+                errorCode: "AI_INVALID_RESPONSE"
             });
         } else if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
             res.status(500).json({
-                message: "The request is taking longer than expected. Please try again in a few moments.",
+                message: getErrorMessage('AI_TIMEOUT'),
                 queryId: queryId,
-                errorCode: "TIMEOUT"
+                errorCode: "AI_TIMEOUT"
             });
-        } else if (error.message.includes('clarification')) {
+        } else if (error.message.includes('clarification') || error.message.includes('AI_INVALID_RESPONSE')) {
             res.status(500).json({
-                message: "Please provide more specific details about your question paper requirements and try again.",
+                message: getErrorMessage('AI_INVALID_RESPONSE'),
                 queryId: queryId,
-                errorCode: "NEEDS_MORE_INFO"
+                errorCode: "AI_INVALID_RESPONSE"
             });
         } else {
             res.status(500).json({ 
-                message: "AI is unable to generate your question paper right now. Please try again in a few moments.",
+                message: getErrorMessage('GENERATION_FAILED'),
                 queryId: queryId,
-                errorCode: "GENERATION_ERROR"
+                errorCode: "GENERATION_FAILED"
             });
         }
     }

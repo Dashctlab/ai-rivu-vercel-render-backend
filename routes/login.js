@@ -4,7 +4,7 @@ const router = express.Router();
 const logActivity = require('../utils/enhancedLogger');
 const { getUsers } = require('../utils/fileUtils');
 const { verifyPassword } = require('../utils/passwordUtils'); // NEW
-
+const { getErrorMessage } = require('../utils/errorMessages');
 /**
  * POST /login - Secure login with bcrypt password verification
  */
@@ -18,9 +18,9 @@ router.post('/', async (req, res) => {
             ip: req.ip,
             userAgent: req.get('User-Agent')
         });
-        return res.status(400).json({ message: 'Email and password are required' });
+        return res.status(400).json({ message: getErrorMessage('MISSING_LOGIN_FIELDS'),  errorCode: 'MISSING_LOGIN_FIELDS'});
     }
-
+    
     // Email format validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
@@ -29,7 +29,7 @@ router.post('/', async (req, res) => {
             ip: req.ip,
             userAgent: req.get('User-Agent')
         });
-        return res.status(400).json({ message: 'Invalid email format' });
+       return res.status(400).json({ message: getErrorMessage('INVALID_EMAIL_FORMAT'), errorCode: 'INVALID_EMAIL_FORMAT'});
     }
 
     const users = getUsers();
@@ -42,7 +42,7 @@ router.post('/', async (req, res) => {
             ip: req.ip,
             userAgent: req.get('User-Agent')
         });
-        return res.status(401).json({ message: 'Invalid credentials' });
+        return res.status(401).json({  message: getErrorMessage('INVALID_LOGIN'), errorCode:'INVALID_LOGIN'});
     }
 
     try {
@@ -76,7 +76,7 @@ router.post('/', async (req, res) => {
                 userAgent: req.get('User-Agent')
             });
             
-            res.status(401).json({ message: 'Invalid credentials' });
+            return res.status(401).json({ message: getErrorMessage('INVALID_LOGIN'), errorCode: 'INVALID_LOGIN'});
         }
     } catch (error) {
         console.error('Login error:', error);
@@ -85,7 +85,7 @@ router.post('/', async (req, res) => {
             error: error.message,
             ip: req.ip
         });
-        res.status(500).json({ message: 'Internal server error' });
+        res.status(500).json({ message: getErrorMessage('AUTH_SYSTEM_ERROR'), errorCode: 'AUTH_SYSTEM_ERROR'});
     }
 });
 
