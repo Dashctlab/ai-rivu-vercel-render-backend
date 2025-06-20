@@ -1,24 +1,26 @@
-// routes/downloadDocx.js 
+// routes/downloadDocx.js - UPDATED with teacher-friendly error messages
 const express = require('express');
 const router = express.Router();
 
 const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType, BorderStyle, PageBreak, TabStopPosition, TabStopType } = require('docx');
 const logActivity = require('../utils/enhancedLogger');
 const { addQuestionParagraph, addOptionParagraph } = require('../utils/docxHelpers');
+const { getErrorMessage } = require('../utils/errorMessages'); // Import centralized error messages
 
 /**
- * FIXED: Enhanced download validation to prevent server crashes
+ * Enhanced download validation to prevent server crashes
  */
 router.post('/', async (req, res) => {
     const email = req.headers['useremail'] || 'anonymous';
     const downloadStartTime = new Date().toISOString();
 
     try {
-        // FIXED: Comprehensive validation of all required fields
+        // Comprehensive validation of all required fields
         const validationResult = validateDownloadData(req.body);
         if (!validationResult.isValid) {
             await logActivity(email, 'Download Failed - Validation Error', {
                 reason: validationResult.error,
+                errorCode: validationResult.errorCode,
                 providedData: {
                     hasSubject: !!req.body.subject,
                     hasMetadata: !!req.body.metadata,
@@ -33,13 +35,13 @@ router.post('/', async (req, res) => {
             });
             
             return res.status(400).json({ 
-                message: validationResult.userMessage,
-                error: 'VALIDATION_ERROR',
-                details: validationResult.error
+                message: getErrorMessage(validationResult.errorCode),
+                error: validationResult.errorCode,
+                errorCode: validationResult.errorCode
             });
         }
 
-        // FIXED: Safely extract validated data
+        // Safely extract validated data
         const { subject, metadata, sections, answerKey } = req.body;
 
         await logActivity(email, 'Download Started', {
@@ -111,7 +113,7 @@ router.post('/', async (req, res) => {
             })
         );
 
-        // FIXED: Proper header table with validated marks
+        // Proper header table with validated marks
         const headerInfoTable = new Table({
             width: { size: 100, type: WidthType.PERCENTAGE },
             borders: {
@@ -274,7 +276,7 @@ router.post('/', async (req, res) => {
         // ========== IMPROVED QUESTION SECTIONS WITH SAFE PROCESSING ==========
         let totalQuestions = 0;
         
-        // FIXED: Safe section processing with validation
+        // Safe section processing with validation
         sections.forEach((sec, secIndex) => {
             try {
                 // Skip exam information section in output
@@ -307,11 +309,11 @@ router.post('/', async (req, res) => {
 
                 let localNum = 1;
                 
-                // FIXED: Safe question processing
+                // Safe question processing
                 if (sec.questions && Array.isArray(sec.questions)) {
                     sec.questions.forEach(qBlock => {
                         try {
-                            // FIXED: Validate question block
+                            // Validate question block
                             if (!qBlock || typeof qBlock !== 'string') {
                                 console.warn(`Invalid question block in section ${sec.title}:`, qBlock);
                                 return;
@@ -321,7 +323,7 @@ router.post('/', async (req, res) => {
                             
                             if (lines.length === 0) return;
 
-                            // FIXED: Better question formatting with marks on same line
+                            // Better question formatting with marks on same line
                             const firstLine = lines[0];
                             const remainingLines = lines.slice(1);
                             
@@ -437,10 +439,10 @@ router.post('/', async (req, res) => {
             })
         );
 
-        // FIXED: Safe answer key processing
+        // Safe answer key processing
         answerKey.forEach((ans, idx) => {
             try {
-                // FIXED: Validate answer entry
+                // Validate answer entry
                 if (!ans || typeof ans !== 'string') {
                     console.warn(`Invalid answer at index ${idx}:`, ans);
                     return;
@@ -547,15 +549,16 @@ router.post('/', async (req, res) => {
 
         if (!res.headersSent) {
             res.status(500).json({ 
-                message: `Failed to generate Word file. Please try again.`,
-                error: 'GENERATION_ERROR'
+                message: getErrorMessage('DOWNLOAD_FAILED'),
+                error: 'DOWNLOAD_FAILED',
+                errorCode: 'DOWNLOAD_FAILED'
             });
         }
     }
 });
 
 /**
- * FIXED: Comprehensive download data validation function
+ * UPDATED: Comprehensive download data validation function with teacher-friendly error codes
  */
 function validateDownloadData(body) {
     // Check if body exists
@@ -563,7 +566,7 @@ function validateDownloadData(body) {
         return {
             isValid: false,
             error: 'Request body is missing or invalid',
-            userMessage: 'Invalid request. Please generate a question paper first.'
+            errorCode: 'NO_PAPER_TO_DOWNLOAD'
         };
     }
 
@@ -574,7 +577,7 @@ function validateDownloadData(body) {
         return {
             isValid: false,
             error: 'Subject is missing or invalid',
-            userMessage: 'Please generate a question paper first before downloading.'
+            errorCode: 'NO_PAPER_TO_DOWNLOAD'
         };
     }
 
@@ -582,7 +585,7 @@ function validateDownloadData(body) {
         return {
             isValid: false,
             error: 'Subject is too long',
-            userMessage: 'Subject name is too long. Please use a shorter subject name.'
+            errorCode: 'PAPER_TOO_COMPLEX'
         };
     }
 
@@ -591,7 +594,7 @@ function validateDownloadData(body) {
         return {
             isValid: false,
             error: 'Metadata is missing or invalid',
-            userMessage: 'Question paper metadata is missing. Please generate the paper again.'
+            errorCode: 'PAPER_DATA_INCOMPLETE'
         };
     }
 
@@ -602,7 +605,7 @@ function validateDownloadData(body) {
             return {
                 isValid: false,
                 error: `Metadata field '${field}' is missing`,
-                userMessage: 'Question paper information is incomplete. Please generate the paper again.'
+                errorCode: 'PAPER_DATA_INCOMPLETE'
             };
         }
     }
@@ -614,7 +617,7 @@ function validateDownloadData(body) {
             return {
                 isValid: false,
                 error: 'Invalid totalMarks format',
-                userMessage: 'Total marks format is invalid. Please regenerate the question paper.'
+                errorCode: 'PAPER_DATA_CORRUPTED'
             };
         }
     } else if (typeof totalMarks === 'number') {
@@ -622,14 +625,14 @@ function validateDownloadData(body) {
             return {
                 isValid: false,
                 error: 'totalMarks out of range',
-                userMessage: 'Total marks value is out of valid range. Please regenerate the question paper.'
+                errorCode: 'PAPER_DATA_CORRUPTED'
             };
         }
     } else {
         return {
             isValid: false,
             error: 'totalMarks must be string or number',
-            userMessage: 'Total marks format is invalid. Please regenerate the question paper.'
+            errorCode: 'PAPER_DATA_CORRUPTED'
         };
     }
 
@@ -638,7 +641,7 @@ function validateDownloadData(body) {
         return {
             isValid: false,
             error: 'Sections array is missing',
-            userMessage: 'Question paper sections are missing. Please generate the paper again.'
+            errorCode: 'NO_QUESTIONS_FOUND'
         };
     }
 
@@ -646,7 +649,7 @@ function validateDownloadData(body) {
         return {
             isValid: false,
             error: 'Sections must be an array',
-            userMessage: 'Question paper format is invalid. Please generate the paper again.'
+            errorCode: 'PAPER_DATA_CORRUPTED'
         };
     }
 
@@ -654,7 +657,7 @@ function validateDownloadData(body) {
         return {
             isValid: false,
             error: 'Sections array is empty',
-            userMessage: 'No question sections found. Please generate the paper again.'
+            errorCode: 'NO_QUESTIONS_FOUND'
         };
     }
 
@@ -662,7 +665,7 @@ function validateDownloadData(body) {
         return {
             isValid: false,
             error: 'Too many sections',
-            userMessage: 'Question paper has too many sections. Please simplify and regenerate.'
+            errorCode: 'PAPER_TOO_COMPLEX'
         };
     }
 
@@ -674,7 +677,7 @@ function validateDownloadData(body) {
             return {
                 isValid: false,
                 error: `Section ${i} is invalid`,
-                userMessage: 'One or more question sections are corrupted. Please regenerate the paper.'
+                errorCode: 'PAPER_DATA_CORRUPTED'
             };
         }
 
@@ -682,7 +685,7 @@ function validateDownloadData(body) {
             return {
                 isValid: false,
                 error: `Section ${i} title is missing or invalid`,
-                userMessage: 'Question section titles are missing. Please regenerate the paper.'
+                errorCode: 'PAPER_DATA_CORRUPTED'
             };
         }
 
@@ -690,7 +693,7 @@ function validateDownloadData(body) {
             return {
                 isValid: false,
                 error: `Section ${i} title is too long`,
-                userMessage: 'Question section title is too long. Please regenerate the paper.'
+                errorCode: 'PAPER_TOO_COMPLEX'
             };
         }
 
@@ -698,7 +701,7 @@ function validateDownloadData(body) {
             return {
                 isValid: false,
                 error: `Section ${i} questions are missing`,
-                userMessage: 'Questions are missing from sections. Please regenerate the paper.'
+                errorCode: 'NO_QUESTIONS_FOUND'
             };
         }
 
@@ -706,7 +709,7 @@ function validateDownloadData(body) {
             return {
                 isValid: false,
                 error: `Section ${i} questions must be an array`,
-                userMessage: 'Question format is invalid. Please regenerate the paper.'
+                errorCode: 'PAPER_DATA_CORRUPTED'
             };
         }
 
@@ -714,7 +717,7 @@ function validateDownloadData(body) {
             return {
                 isValid: false,
                 error: `Section ${i} has too many questions`,
-                userMessage: 'Section has too many questions. Please reduce and regenerate.'
+                errorCode: 'PAPER_TOO_COMPLEX'
             };
         }
 
@@ -726,7 +729,7 @@ function validateDownloadData(body) {
                 return {
                     isValid: false,
                     error: `Section ${i}, question ${j} must be a string`,
-                    userMessage: 'Question format is invalid. Please regenerate the paper.'
+                    errorCode: 'PAPER_DATA_CORRUPTED'
                 };
             }
 
@@ -734,7 +737,7 @@ function validateDownloadData(body) {
                 return {
                     isValid: false,
                     error: `Section ${i}, question ${j} is too long`,
-                    userMessage: 'One or more questions are too long. Please regenerate the paper.'
+                    errorCode: 'PAPER_TOO_COMPLEX'
                 };
             }
         }
@@ -745,7 +748,7 @@ function validateDownloadData(body) {
         return {
             isValid: false,
             error: 'Answer key is missing',
-            userMessage: 'Answer key is missing. Please generate the paper again.'
+            errorCode: 'NO_ANSWER_KEY_FOUND'
         };
     }
 
@@ -753,7 +756,7 @@ function validateDownloadData(body) {
         return {
             isValid: false,
             error: 'Answer key must be an array',
-            userMessage: 'Answer key format is invalid. Please generate the paper again.'
+            errorCode: 'PAPER_DATA_CORRUPTED'
         };
     }
 
@@ -761,7 +764,7 @@ function validateDownloadData(body) {
         return {
             isValid: false,
             error: 'Answer key has too many entries',
-            userMessage: 'Answer key is too large. Please reduce questions and regenerate.'
+            errorCode: 'PAPER_TOO_COMPLEX'
         };
     }
 
@@ -773,7 +776,7 @@ function validateDownloadData(body) {
             return {
                 isValid: false,
                 error: `Answer ${i} must be a string`,
-                userMessage: 'Answer key format is invalid. Please regenerate the paper.'
+                errorCode: 'PAPER_DATA_CORRUPTED'
             };
         }
 
@@ -781,7 +784,7 @@ function validateDownloadData(body) {
             return {
                 isValid: false,
                 error: `Answer ${i} is too long`,
-                userMessage: 'One or more answers are too long. Please regenerate the paper.'
+                errorCode: 'PAPER_TOO_COMPLEX'
             };
         }
     }
@@ -790,7 +793,7 @@ function validateDownloadData(body) {
     return {
         isValid: true,
         error: null,
-        userMessage: null
+        errorCode: null
     };
 }
 
