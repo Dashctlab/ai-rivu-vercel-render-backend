@@ -33,6 +33,7 @@ const routes = require('./routes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const { getErrorMessage } = require('./utils/errorMessages');
 
 // SECURITY: Trust proxy (important for Render/Heroku deployment)
 app.set('trust proxy', 1);
@@ -136,29 +137,30 @@ app.use(async (err, req, res, next) => {
         timestamp: timestamp
     });
 
-    if (!res.headersSent) {
-        // Don't leak error details in production
-        if (process.env.NODE_ENV === 'production') {
-            res.status(500).json({
-                error: 'Internal Server Error',
-                message: 'Something went wrong. Please try again.',
-                timestamp: timestamp
-            });
-        } else {
-            res.status(500).json({
-                error: 'Internal Server Error',
-                message: err.message,
-                timestamp: timestamp
-            });
-        }
-    }
+        if (!res.headersSent) {
+            if (process.env.NODE_ENV === 'production') {
+                res.status(500).json({
+                    error: 'Internal Server Error',
+                    message: getErrorMessage('SERVER_ERROR'),
+                    errorCode: 'SERVER_ERROR'
+                });
+            } else {
+                res.status(500).json({
+                    error: 'Internal Server Error',
+                    message: getErrorMessage('SERVER_ERROR'),
+                    errorCode: 'SERVER_ERROR',
+                    details: err.message // Keep details in development
+                });
+            }
+        }    
 });
 
 // SECURITY: 404 handler (prevent information disclosure)
 app.use('*', (req, res) => {
     res.status(404).json({
         error: 'Not Found',
-        message: 'The requested resource was not found'
+        message: getErrorMessage('PAGE_NOT_FOUND'),
+        errorCode: 'PAGE_NOT_FOUND'
     });
 });
 
