@@ -1,6 +1,6 @@
 // middleware/validation.js - FIXED VERSION with Half Marks Support (0.5 increments)
 const Joi = require('joi');
-
+const { getErrorMessage } = require('../utils/errorMessages');
 // Validation schemas
 const schemas = {
   // Login validation (unchanged)
@@ -221,7 +221,8 @@ function validateInput(schema) {
 
             return res.status(400).json({
                 error: 'Validation failed',
-                message: 'Please check your input and try again',
+               message: getErrorMessage('MISSING_REQUIRED_FIELDS'),
+                errorCode: 'VALIDATION_FAILED',
                 details: errorDetails
             });
         }
