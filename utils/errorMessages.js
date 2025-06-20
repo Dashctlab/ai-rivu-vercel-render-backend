@@ -1,8 +1,9 @@
 // utils/errorMessages.js - Centralized Error Message System
+// UPDATED: Teacher-friendly messages that make sense in education context
 
 /**
  * Teacher-friendly error messages with contact information
- * Structured for future multi-language support
+ * All messages explain what happened and what teachers should do next
  */
 
 const CONTACT_INFO = "📞 +91-8828015315 or visit our Contact Page";
@@ -40,6 +41,9 @@ const ERROR_MESSAGES = {
   AI_INVALID_RESPONSE: `The AI gave an unexpected response. Please try generating the paper again. Contact support if the issue persists: ${CONTACT_INFO}`,
   GENERATION_FAILED: `Unable to generate your question paper right now. Please try again in a few moments. Contact support if the issue persists: ${CONTACT_INFO}`,
   
+  // === MODEL TESTING ERRORS (System Issues) ===
+  MODEL_TEST_FAILED: `Model testing failed. Please try again in a few moments. Contact support if the issue persists: ${CONTACT_INFO}`,
+  
   // === NETWORK/CONNECTION ERRORS (Mixed) ===
   NETWORK_ERROR: `Connection problem detected. Please check your internet connection and try again. Contact support if the issue persists: ${CONTACT_INFO}`,
   REQUEST_TIMEOUT: `The request is taking longer than usual. Please try again in a few moments. Contact support if the issue persists: ${CONTACT_INFO}`,
@@ -54,22 +58,35 @@ const ERROR_MESSAGES = {
   SESSION_EXPIRED: "Your session has expired. Please refresh the page and log in again.",
   UNAUTHORIZED_ACCESS: "Please log in first to access this feature.",
   
-  // === DOWNLOAD ERRORS ===
+  // === DOWNLOAD ERRORS (UPDATED: Teacher-friendly messages) ===
   DOWNLOAD_FAILED: `Failed to create your Word file. Please try again in a few moments. Contact support if the issue persists: ${CONTACT_INFO}`,
-  DOWNLOAD_DATA_MISSING: "Please generate a question paper first before downloading.",
-  DOWNLOAD_FORMAT_ERROR: `File format error detected. Please try generating the paper again. Contact support if the issue persists: ${CONTACT_INFO}`,
+  
+  // NEW: Teacher-friendly download error codes
+  NO_PAPER_TO_DOWNLOAD: "Please generate a question paper first before downloading.",
+  NO_QUESTIONS_FOUND: "No questions found in your paper. Please generate the paper again.",
+  NO_ANSWER_KEY_FOUND: "Answer key is missing from your paper. Please generate the paper again.",
+  PAPER_DATA_INCOMPLETE: "Your question paper information is incomplete. Please generate the paper again.",
+  PAPER_DATA_CORRUPTED: `Your question paper data got corrupted. Please generate the paper again. Contact support if the issue persists: ${CONTACT_INFO}`,
+  PAPER_TOO_COMPLEX: "Your question paper is too large or complex to download. Please create a simpler paper with fewer questions and try again.",
   
   // === GENERAL ERRORS ===
   DEFAULT_ERROR: `Something unexpected happened. Please try again in a few moments. Contact support if the issue persists: ${CONTACT_INFO}`,
   PAGE_NOT_FOUND: "The page you're looking for doesn't exist. Please check the URL or go back to the home page.",
   FEATURE_NOT_AVAILABLE: "This feature is not available right now. Please try again later.",
   
-  // === VALIDATION ERRORS (User Fixable) ===
+  // === VALIDATION ERRORS (User Fixable - UPDATED: Teacher-friendly) ===
   INVALID_FILE_FORMAT: "Please select a valid file format.",
-  FILE_TOO_LARGE: "File is too large. Please select a smaller file.",
+  FILE_TOO_LARGE: "The file you selected is too large. Please select a smaller file.",
   INVALID_INPUT_CHARACTERS: "Please use only letters, numbers, and common punctuation.",
-  INPUT_TOO_LONG: "Input is too long. Please shorten your text.",
-  INPUT_TOO_SHORT: "Input is too short. Please provide more details."
+  INPUT_TOO_LONG: "Your text is too long. Please shorten it and try again.",
+  INPUT_TOO_SHORT: "Please provide more details.",
+  
+  // === SPECIFIC PAPER GENERATION ERRORS (User Fixable) ===
+  SUBJECT_NAME_TOO_LONG: "Subject name is too long. Please use a shorter subject name.",
+  TOO_MANY_SECTIONS: "Your paper has too many sections. Please simplify and create fewer question types.",
+  SECTION_TOO_LARGE: "One of your sections has too many questions. Please reduce questions per section and try again.",
+  QUESTIONS_TOO_DETAILED: "Some questions are very long. Please make them shorter and try again.",
+  ANSWER_KEY_TOO_LARGE: "Your answer key is too large. Please reduce the number of questions and try again."
 };
 
 /**
@@ -119,12 +136,12 @@ function getErrorCategory(errorCode) {
   if (errorCode.includes('AI') || errorCode.includes('GENERATION')) return 'ai_service';
   if (errorCode.includes('NETWORK') || errorCode.includes('TIMEOUT')) return 'network';
   if (errorCode.includes('SERVER') || errorCode.includes('DATABASE')) return 'server';
-  if (errorCode.includes('DOWNLOAD')) return 'download';
+  if (errorCode.includes('DOWNLOAD') || errorCode.includes('PAPER')) return 'download';
   if (errorCode.includes('QUOTA') || errorCode.includes('LIMIT')) return 'quota';
   return 'general';
 }
 
-// === LEGACY ERROR CODE MAPPING ===
+// === LEGACY ERROR CODE MAPPING (UPDATED: Complete mapping) ===
 // Map old error types to new error codes for backward compatibility
 const LEGACY_MAPPING = {
   'network': 'NETWORK_ERROR',
@@ -133,7 +150,30 @@ const LEGACY_MAPPING = {
   'generation': 'GENERATION_FAILED',
   'auth': 'AUTH_SYSTEM_ERROR',
   'server': 'SERVER_ERROR',
-  'default': 'DEFAULT_ERROR'
+  'default': 'DEFAULT_ERROR',
+  
+  // Additional mappings for generate.js compatibility
+  'CONNECTION_ERROR': 'AI_SERVICE_ERROR',
+  'SERVICE_BUSY': 'AI_SERVICE_BUSY',
+  'INVALID_REQUEST': 'AI_INVALID_RESPONSE',
+  'TIMEOUT': 'AI_TIMEOUT',
+  'NEEDS_MORE_INFO': 'AI_INVALID_RESPONSE',
+  'GENERATION_ERROR': 'GENERATION_FAILED',
+  
+  // UPDATED: Download error mappings with new teacher-friendly codes
+  'DOCX_GENERATION_ERROR': 'DOWNLOAD_FAILED',
+  'VALIDATION_ERROR': 'NO_PAPER_TO_DOWNLOAD',
+  'DOWNLOAD_DATA_MISSING': 'NO_PAPER_TO_DOWNLOAD',
+  'DOWNLOAD_FORMAT_ERROR': 'PAPER_DATA_CORRUPTED',
+  'INPUT_TOO_LONG': 'PAPER_TOO_COMPLEX',
+  
+  // Additional specific mappings
+  'MISSING_SUBJECT': 'NO_PAPER_TO_DOWNLOAD',
+  'MISSING_METADATA': 'PAPER_DATA_INCOMPLETE',
+  'MISSING_SECTIONS': 'NO_QUESTIONS_FOUND',
+  'MISSING_ANSWER_KEY': 'NO_ANSWER_KEY_FOUND',
+  'CORRUPTED_DATA': 'PAPER_DATA_CORRUPTED',
+  'PAPER_TOO_LARGE': 'PAPER_TOO_COMPLEX'
 };
 
 /**
